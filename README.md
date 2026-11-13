@@ -1,164 +1,89 @@
 # Sungrow SH15T Dashboard
 
-Kleiner Webserver, der Live-Werte eines Sungrow SH15T per Modbus TCP ausliest
-und als Dashboard anzeigt. Es wird ausschließlich gelesen (FC 04, Input-Register).
+Kleiner Webserver, der die Live-Werte eines Sungrow SH15T (Hybrid-Wechselrichter
+mit Batterie) per Modbus TCP ausliest, als Dashboard im Browser anzeigt und auf
+Wunsch per MQTT an Home Assistant weitergibt. Der Server liest nur und schreibt
+nichts auf den Wechselrichter.
 
-## Start
+![Dashboard mit Energiefluss und Kacheln](docs/dashboard.png)
+
+*Beispielwerte. Oben der Energiefluss zwischen PV, Batterie, Haus und Netz, darunter die Einzelwerte.*
+
+## Was du brauchst
+
+- Einen Rechner im selben Netz wie der Wechselrichter (Ubuntu für Dauerbetrieb, Windows zum Ausprobieren)
+- Python 3.10 oder neuer
+- Die IP-Adresse des Wechselrichters (WiNet-S) oder des iHomeManagers; Modbus TCP muss dort erreichbar sein (Port 502)
+
+## Installation auf Ubuntu (Dauerbetrieb)
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt      # Windows: .venv\Scripts\pip
-.venv/bin/python server.py                     # Windows: .venv\Scripts\python server.py
+git clone https://github.com/<your-username>/sungrow-dashboard.git
+cd sungrow-dashboard
+sudo bash deploy/install.sh
 ```
 
-Danach im Browser `http://<IP-des-Servers>:8080` öffnen. Beim ersten Start
-öffnet sich das Einstellungsformular automatisch; später über das Zahnrad.
-Die Einstellungen landen in `settings.json` und überleben einen Neustart.
+Das Skript installiert Python, kopiert das Programm nach `/opt/sungrow-dashboard`,
+richtet den Dienst `sungrow-dashboard` ein und startet ihn. Am Ende zeigt es die
+Adresse des Dashboards (`http://<IP-des-Rechners>:8080`). Der Dienst startet nach
+jedem Neustart von selbst.
 
-Optionen: `--port 9000`, `--host 192.168.1.10` (nur an eine Schnittstelle binden).
+Für ein Update: `git pull`, dann das Skript erneut ausführen. Die Einstellungen bleiben erhalten.
 
-## Einstellungen
+## Start auf Windows (zum Ausprobieren)
 
-| Feld | Standard | Hinweis |
-|---|---|---|
-| IP-Adresse | – | IPv4 oder Hostname |
-| Port | 502 | |
-| Gerätetyp | WiNet-S / Wechselrichter | Unit-ID 1, SH-Registermap; iHomeManager: Unit-ID 247, iHM-Map; kombiniert: beide (siehe unten) |
-| Unit-ID | vom Gerätetyp | überschreibbar |
-| Abfrageintervall | 10 s | 2 bis 3600 s |
-
-"Verbindung testen" liest alle Register der gewählten Map und zeigt die Werte.
-Der Test trennt dafür kurz die laufende Verbindung, weil Sungrow nur einen
-Modbus-Client gleichzeitig verträgt.
-
-## API
-
-| Methode | Pfad | |
-|---|---|---|
-| GET | `/` | Dashboard |
-| GET | `/api/values` | aktuelle Werte mit Zeitstempel |
-| GET | `/api/settings` | gespeicherte Einstellungen |
-| POST | `/api/settings` | speichern, Poller verbindet neu |
-| POST | `/api/test` | Verbindungstest ohne Speichern |
-
-Body für beide POSTs:
-
-```json
-{"host": "192.168.1.50", "port": 502, "device_type": "winet", "unit_id": 1, "interval": 10}
+```powershell
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python server.py
 ```
 
-Vorzeichen in `/api/values`: `battery_power` > 0 = Entladen, < 0 = Laden;
-`grid_power` > 0 = Netzbezug, < 0 = Einspeisung. Nicht verfügbare Werte sind `null`.
+Dann `http://localhost:8080` öffnen. Der Server läuft, solange das Terminal offen ist; `Strg+C` beendet ihn.
 
-## Register
+## Einrichten
 
-Die Adressen stehen mit Quellenangabe in `registers.py` und stammen aus:
+Beim ersten Aufruf öffnet sich das Einstellungsformular von selbst, später über das Zahnrad oben rechts.
 
-- SH-Map: `modbus_sungrow.yaml` aus mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant
-- iHM-Map: `templates/definition/meter/sungrow-ihm.yaml` aus dem evcc-Repo
+![Einstellungsformular mit Verbindung und MQTT](docs/einstellungen.png)
 
-Die iHM-Map enthält nur WR-Ausgangsleistung (AC), Netz- und Batterieleistung
-sowie SOC. Register 8155 ist am echten Gerät die AC-Leistung des Wechselrichters
-(PV + Batterie-Entladung - Verluste), nicht die PV-Leistung.
+1. **IP-Adresse** des Wechselrichters bzw. iHomeManagers eintragen.
+2. **Gerätetyp** wählen:
 
-### Gerätetyp "iHomeManager + Wechselrichter (kombiniert)"
+   | Gerätetyp | Wann |
+   |---|---|
+   | WiNet-S / Wechselrichter | Der Wechselrichter hängt direkt im Netz (Unit-ID 1). |
+   | iHomeManager | Nur die Werte des iHomeManagers (Unit-ID 247). Tagesertrag und Status fehlen dann. |
+   | iHomeManager + Wechselrichter (kombiniert) | Der Wechselrichter hängt am iHomeManager. Liefert alle Werte und ist in diesem Fall die richtige Wahl. |
 
-Hängt der Wechselrichter am iHomeManager, reicht dieser Unit-ID 1 an den
-Wechselrichter durch. Der kombinierte Modus liest über eine Verbindung beide Maps:
+3. **Verbindung testen** drücken. Es erscheint eine Liste, welche Register Werte liefern.
+4. **Speichern**. Der Server verbindet sich sofort neu, ein Neustart ist nicht nötig.
 
-| Wert | Quelle |
-|---|---|
-| PV-Leistung, Tagesertrag, Status | Wechselrichter (Unit-ID 1) |
-| Batterie-SOC, Batterie-Leistung | Wechselrichter, ersatzweise iHM |
-| Netz | iHM, Register 8157 (beim Wechselrichter steht hier 0, der Zähler hängt am iHM) |
-| Hausverbrauch | berechnet: iHM-AC-Leistung (8155) + Netzbezug |
-
-Im reinen iHM-Modus fehlen Tagesertrag und Status; die PV-Leistung wird dort
-als AC-Leistung minus Batterie-Entladung genähert (ohne Wandlungsverluste).
+Die Einstellungen liegen in `settings.json` neben dem Programm und überstehen einen Neustart.
 
 ## Home Assistant (MQTT)
 
-Im Einstellungsformular unter "Home Assistant (MQTT)" aktivieren und Broker,
-Port (Standard 1883), Benutzer, Passwort und Topic-Präfix (Standard `sungrow`)
-eintragen. Voraussetzung in Home Assistant: ein MQTT-Broker (z. B. das Add-on
-"Mosquitto broker") und die MQTT-Integration mit aktivierter Discovery (Standard).
+Voraussetzung in Home Assistant: ein MQTT-Broker (zum Beispiel das Add-on
+„Mosquitto broker") und die MQTT-Integration.
 
-Das Gerät "Sungrow SH15T" erscheint dann automatisch mit diesen Sensoren:
+Im Einstellungsformular unter „Home Assistant (MQTT)" den Haken setzen, Broker,
+Benutzer und Passwort eintragen und speichern. In der Statuszeile unten steht
+dann „MQTT: verbunden mit …", und in Home Assistant erscheint das Gerät
+„Sungrow SH15T" automatisch mit elf Sensoren (PV-Leistung, Tagesertrag,
+Batterie-SOC, Batterie- und Netzleistung, Hausverbrauch, Status).
 
-| Sensor | Entität | Einheit |
-|---|---|---|
-| PV-Leistung | `sensor.sungrow_pv_power` | W |
-| Tagesertrag | `sensor.sungrow_daily_yield` | kWh |
-| Batterie-SOC | `sensor.sungrow_battery_soc` | % |
-| Batterie-Leistung (> 0 = Entladen) | `sensor.sungrow_battery_power` | W |
-| Batterie Laden / Entladen (jeweils ≥ 0) | `sensor.sungrow_battery_charge_power`, `..._discharge_power` | W |
-| Netzleistung (> 0 = Bezug) | `sensor.sungrow_grid_power` | W |
-| Netzbezug / Einspeisung (jeweils ≥ 0) | `sensor.sungrow_grid_import_power`, `..._export_power` | W |
-| Hausverbrauch | `sensor.sungrow_load_power` | W |
-| Wechselrichter-Status | `sensor.sungrow_status` | Text |
+Antwortet der Wechselrichter nicht, werden die Sensoren in Home Assistant
+„nicht verfügbar" statt 0.
 
-Topics:
+## Gut zu wissen
 
-- `sungrow/state`: JSON mit allen Werten, nach jeder Abfrage
-- `sungrow/status`: `online` / `offline` (retained, Last Will). Offline heißt:
-  Server läuft nicht oder der Wechselrichter antwortet nicht; die Sensoren sind
-  dann in Home Assistant "nicht verfügbar".
-- `homeassistant/sensor/sungrow/<wert>/config`: Discovery (retained)
+- **Port ändern:** `python server.py --port 9000` bzw. die `ExecStart`-Zeile in `deploy/sungrow-dashboard.service` anpassen.
+- **Nur im Heimnetz:** Der Server beantwortet nur Anfragen aus privaten Adressbereichen. Keine Portfreigabe im Router einrichten.
+- **Ein Server pro Anlage:** Nicht zwei Instanzen gleichzeitig gegen dasselbe Gerät laufen lassen.
+- **Vorzeichen:** Batterie positiv = Entladen, Netz positiv = Bezug. Die Kacheln schreiben die Richtung dazu.
+- **Passwort:** Das MQTT-Passwort liegt im Klartext in `settings.json`. Die Datei gehört nicht ins Repository und steht deshalb in der `.gitignore`.
+- **Dienst prüfen (Ubuntu):** `systemctl status sungrow-dashboard`, Log mit `journalctl -u sungrow-dashboard -f`.
 
-Wird MQTT abgeschaltet oder das Präfix geändert, entfernt der Server die
-Discovery-Einträge wieder. Der Server veröffentlicht nur und nimmt über MQTT
-keine Befehle an. Das Passwort liegt im Klartext in `settings.json` (unter
-Linux nur für den Dienstbenutzer lesbar) und wird nie an den Browser zurückgegeben.
+## Mehr Details
 
-Für das Energie-Dashboard braucht Home Assistant Energiewerte (kWh). Der
-Tagesertrag ist direkt nutzbar; für Netz und Batterie in Home Assistant je einen
-Helfer "Integral (Riemann-Summe)" auf die getrennten Leistungssensoren anlegen.
-
-## Netzwerk
-
-Der Server lauscht auf allen Schnittstellen, beantwortet aber nur Anfragen aus
-privaten Adressbereichen (sonst HTTP 403). Keine Portfreigabe im Router einrichten.
-
-## Dauerbetrieb mit systemd
-
-`/etc/systemd/system/sungrow-dashboard.service` (Pfade und Benutzer anpassen):
-
-```ini
-[Unit]
-Description=Sungrow SH15T Dashboard
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=sungrow
-WorkingDirectory=/opt/sungrow-dashboard
-ExecStart=/opt/sungrow-dashboard/.venv/bin/python server.py --port 8080
-Restart=always
-RestartSec=5
-NoNewPrivileges=true
-ProtectSystem=strict
-ReadWritePaths=/opt/sungrow-dashboard
-ProtectHome=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now sungrow-dashboard
-journalctl -u sungrow-dashboard -f
-```
-
-## Test ohne Wechselrichter
-
-`tools/sim_modbus.py` ist ein kleiner Modbus-Simulator mit Beispielwerten für beide Maps:
-
-```bash
-python tools/sim_modbus.py --port 5020 &
-python server.py --port 8080 &
-curl -X POST localhost:8080/api/settings -H "Content-Type: application/json" \
-  -d '{"host":"127.0.0.1","port":5020,"device_type":"winet","unit_id":1,"interval":5}'
-curl localhost:8080/api/values
-```
+[docs/technik.md](docs/technik.md) beschreibt die API, die Registerquellen, die
+MQTT-Topics mit allen Entitätsnamen und den Test mit dem mitgelieferten Simulator.
