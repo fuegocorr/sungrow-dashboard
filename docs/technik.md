@@ -1,6 +1,8 @@
 # Technische Details
 
-Ergänzung zur [Kurzanleitung](../README.md): Einstellungen, API, Register, MQTT-Topics, systemd und Test mit dem Simulator.
+🇬🇧 [English version](technical.md)
+
+Ergänzung zur [Kurzanleitung](../README.de.md): Einstellungen, API, Register, MQTT-Topics, systemd und Test mit dem Simulator.
 
 Start von Hand: `python server.py`, Optionen `--port 9000` und `--host 192.168.1.10` (nur an eine Schnittstelle binden).
 
@@ -36,6 +38,10 @@ Body für beide POSTs:
 
 Vorzeichen in `/api/values`: `battery_power` > 0 = Entladen, < 0 = Laden;
 `grid_power` > 0 = Netzbezug, < 0 = Einspeisung. Nicht verfügbare Werte sind `null`.
+
+Fehlermeldungen kommen auf Deutsch; mit `?lang=en` an der Adresse (z. B. `/api/values?lang=en`) auf Englisch.
+Optionale MQTT-Felder im Body: `mqtt_enabled`, `mqtt_host`, `mqtt_port`, `mqtt_user`, `mqtt_password`,
+`mqtt_prefix`, `mqtt_language` (`de` oder `en`, Sprache der Sensornamen).
 
 ## Register
 

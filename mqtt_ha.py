@@ -21,19 +21,19 @@ log = logging.getLogger("sungrow.mqtt")
 
 DISCOVERY_PREFIX = "homeassistant"
 
-# key, Name, Einheit, device_class, state_class, Icon
+# key, Name (de, en), Einheit, device_class, state_class, Icon
 SENSORS = [
-    ("pv_power", "PV-Leistung", "W", "power", "measurement", "mdi:solar-power"),
-    ("daily_yield", "Tagesertrag", "kWh", "energy", "total_increasing", "mdi:solar-power-variant"),
-    ("battery_soc", "Batterie-SOC", "%", "battery", "measurement", None),
-    ("battery_power", "Batterie-Leistung", "W", "power", "measurement", "mdi:home-battery"),
-    ("battery_charge_power", "Batterie Laden", "W", "power", "measurement", "mdi:battery-arrow-up"),
-    ("battery_discharge_power", "Batterie Entladen", "W", "power", "measurement", "mdi:battery-arrow-down"),
-    ("grid_power", "Netzleistung", "W", "power", "measurement", "mdi:transmission-tower"),
-    ("grid_import_power", "Netzbezug", "W", "power", "measurement", "mdi:transmission-tower-import"),
-    ("grid_export_power", "Einspeisung", "W", "power", "measurement", "mdi:transmission-tower-export"),
-    ("load_power", "Hausverbrauch", "W", "power", "measurement", "mdi:home-lightning-bolt"),
-    ("status", "Wechselrichter-Status", None, None, None, "mdi:information-outline"),
+    ("pv_power", ("PV-Leistung", "PV power"), "W", "power", "measurement", "mdi:solar-power"),
+    ("daily_yield", ("Tagesertrag", "Daily yield"), "kWh", "energy", "total_increasing", "mdi:solar-power-variant"),
+    ("battery_soc", ("Batterie-SOC", "Battery SOC"), "%", "battery", "measurement", None),
+    ("battery_power", ("Batterie-Leistung", "Battery power"), "W", "power", "measurement", "mdi:home-battery"),
+    ("battery_charge_power", ("Batterie Laden", "Battery charging"), "W", "power", "measurement", "mdi:battery-arrow-up"),
+    ("battery_discharge_power", ("Batterie Entladen", "Battery discharging"), "W", "power", "measurement", "mdi:battery-arrow-down"),
+    ("grid_power", ("Netzleistung", "Grid power"), "W", "power", "measurement", "mdi:transmission-tower"),
+    ("grid_import_power", ("Netzbezug", "Grid import"), "W", "power", "measurement", "mdi:transmission-tower-import"),
+    ("grid_export_power", ("Einspeisung", "Grid feed-in"), "W", "power", "measurement", "mdi:transmission-tower-export"),
+    ("load_power", ("Hausverbrauch", "Home consumption"), "W", "power", "measurement", "mdi:home-lightning-bolt"),
+    ("status", ("Wechselrichter-Status", "Inverter status"), None, None, None, "mdi:information-outline"),
 ]
 
 
@@ -51,8 +51,8 @@ def state_payload(values: dict) -> dict:
     return out
 
 
-def discovery_messages(prefix: str) -> list:
-    """Liste (topic, payload) der Discovery-Konfigurationen."""
+def discovery_messages(prefix: str, lang: str = "de") -> list:
+    """Liste (topic, payload) der Discovery-Konfigurationen; lang = Sprache der Sensornamen."""
     device = {
         "identifiers": [f"sungrow_dashboard_{prefix}"],
         "name": "Sungrow SH15T",
@@ -60,9 +60,9 @@ def discovery_messages(prefix: str) -> list:
         "model": "SH15T",
     }
     msgs = []
-    for key, name, unit, dev_class, state_class, icon in SENSORS:
+    for key, names, unit, dev_class, state_class, icon in SENSORS:
         cfg = {
-            "name": name,
+            "name": names[1] if lang == "en" else names[0],
             "unique_id": f"{prefix}_{key}",
             "object_id": f"{prefix}_{key}",
             "state_topic": f"{prefix}/state",
@@ -90,7 +90,7 @@ class MqttPublisher:
         self.client = None
         self.cfg = None  # aktive Einstellungen (nur MQTT-Teil)
         self.connected = False
-        self.error = None
+        self.error = None  # (Meldungsschlüssel, Detail); der Server übersetzt
         self._online = False
         self._sent_online = None  # zuletzt gesendeter Status (nur Änderungen senden)
         self._state = None
@@ -110,7 +110,7 @@ class MqttPublisher:
         new = None
         if settings.get("mqtt_enabled") and settings.get("mqtt_host"):
             new = {k: settings[k] for k in ("mqtt_host", "mqtt_port", "mqtt_user",
-                                            "mqtt_password", "mqtt_prefix")}
+                                            "mqtt_password", "mqtt_prefix", "mqtt_language")}
         if new == self.cfg:
             return
         # Entitäten in Home Assistant entfernen, wenn MQTT abgeschaltet oder das Präfix geändert wird
@@ -181,13 +181,13 @@ class MqttPublisher:
             return
         if reason_code.is_failure:
             self.connected = False
-            self.error = f"Broker lehnt ab: {reason_code}"
-            log.warning("MQTT: %s", self.error)
+            self.error = ("mqtt_refused", str(reason_code))
+            log.warning("MQTT: Broker lehnt ab: %s", reason_code)
             return
         self.connected, self.error = True, None
         self._sent_online = None
         log.info("MQTT verbunden mit %s:%s", self.cfg["mqtt_host"], self.cfg["mqtt_port"])
-        for topic, payload in discovery_messages(self.cfg["mqtt_prefix"]):
+        for topic, payload in discovery_messages(self.cfg["mqtt_prefix"], self.cfg["mqtt_language"]):
             client.publish(topic, payload, qos=1, retain=True)
         self._send()
 
@@ -196,14 +196,14 @@ class MqttPublisher:
             return
         self.connected = False
         if reason_code.is_failure:
-            self.error = f"Verbindung getrennt: {reason_code}"
-            log.warning("MQTT: %s", self.error)
+            self.error = ("mqtt_lost", str(reason_code))
+            log.warning("MQTT: Verbindung getrennt: %s", reason_code)
 
     def _on_connect_fail(self, client, _userdata):
         if client is not self.client:
             return
         self.connected = False
-        err = "Broker nicht erreichbar"
+        err = ("mqtt_unreachable", "")
         if self.error != err:
-            log.warning("MQTT: %s (%s:%s)", err, self.cfg["mqtt_host"], self.cfg["mqtt_port"])
+            log.warning("MQTT: Broker nicht erreichbar (%s:%s)", self.cfg["mqtt_host"], self.cfg["mqtt_port"])
         self.error = err

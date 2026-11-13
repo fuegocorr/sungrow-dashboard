@@ -1,21 +1,23 @@
 # Sungrow SH15T Dashboard
 
-Kleiner Webserver, der die Live-Werte eines Sungrow SH15T (Hybrid-Wechselrichter
-mit Batterie) per Modbus TCP ausliest, als Dashboard im Browser anzeigt und auf
-Wunsch per MQTT an Home Assistant weitergibt. Der Server liest nur und schreibt
-nichts auf den Wechselrichter.
+🇩🇪 [Deutsche Version](README.de.md)
 
-![Dashboard mit Energiefluss und Kacheln](docs/dashboard.png)
+A small web server that reads live values from a Sungrow SH15T (hybrid inverter
+with battery) via Modbus TCP, shows them as a dashboard in the browser and can
+pass them on to Home Assistant via MQTT. The server only reads; it never writes
+to the inverter.
 
-*Beispielwerte. Oben der Energiefluss zwischen PV, Batterie, Haus und Netz, darunter die Einzelwerte.*
+![Dashboard with energy flow and tiles](docs/dashboard.png)
 
-## Was du brauchst
+*Example values. At the top the energy flow between PV, battery, home and grid, below it the individual values.*
 
-- Einen Rechner im selben Netz wie der Wechselrichter (Ubuntu für Dauerbetrieb, Windows zum Ausprobieren)
-- Python 3.10 oder neuer
-- Die IP-Adresse des Wechselrichters (WiNet-S) oder des iHomeManagers; Modbus TCP muss dort erreichbar sein (Port 502)
+## What you need
 
-## Installation auf Ubuntu (Dauerbetrieb)
+- A computer on the same network as the inverter (Ubuntu for permanent operation, Windows for trying it out)
+- Python 3.10 or newer
+- The IP address of the inverter (WiNet-S) or of the iHomeManager; Modbus TCP must be reachable there (port 502)
+
+## Installation on Ubuntu (permanent operation)
 
 ```bash
 git clone https://github.com/<your-username>/sungrow-dashboard.git
@@ -23,14 +25,14 @@ cd sungrow-dashboard
 sudo bash deploy/install.sh
 ```
 
-Das Skript installiert Python, kopiert das Programm nach `/opt/sungrow-dashboard`,
-richtet den Dienst `sungrow-dashboard` ein und startet ihn. Am Ende zeigt es die
-Adresse des Dashboards (`http://<IP-des-Rechners>:8080`). Der Dienst startet nach
-jedem Neustart von selbst.
+The script installs Python, copies the program to `/opt/sungrow-dashboard`,
+sets up the `sungrow-dashboard` service and starts it. At the end it prints the
+address of the dashboard (`http://<IP-of-the-computer>:8080`). The service
+starts by itself after every reboot.
 
-Für ein Update: `git pull`, dann das Skript erneut ausführen. Die Einstellungen bleiben erhalten.
+To update: `git pull`, then run the script again. Your settings are kept.
 
-## Start auf Windows (zum Ausprobieren)
+## Running on Windows (for trying it out)
 
 ```powershell
 python -m venv .venv
@@ -38,52 +40,64 @@ python -m venv .venv
 .venv\Scripts\python server.py
 ```
 
-Dann `http://localhost:8080` öffnen. Der Server läuft, solange das Terminal offen ist; `Strg+C` beendet ihn.
+Then open `http://localhost:8080`. The server runs as long as the terminal is open; `Ctrl+C` stops it.
 
-## Einrichten
+## Setup
 
-Beim ersten Aufruf öffnet sich das Einstellungsformular von selbst, später über das Zahnrad oben rechts.
+On the first visit the settings form opens by itself; later you reach it via the gear icon at the top right.
 
-![Einstellungsformular mit Verbindung und MQTT](docs/einstellungen.png)
+![Settings form with connection and MQTT](docs/settings.png)
 
-1. **IP-Adresse** des Wechselrichters bzw. iHomeManagers eintragen.
-2. **Gerätetyp** wählen:
+1. Enter the **IP address** of the inverter or iHomeManager.
+2. Choose the **device type**:
 
-   | Gerätetyp | Wann |
+   | Device type | When |
    |---|---|
-   | WiNet-S / Wechselrichter | Der Wechselrichter hängt direkt im Netz (Unit-ID 1). |
-   | iHomeManager | Nur die Werte des iHomeManagers (Unit-ID 247). Tagesertrag und Status fehlen dann. |
-   | iHomeManager + Wechselrichter (kombiniert) | Der Wechselrichter hängt am iHomeManager. Liefert alle Werte und ist in diesem Fall die richtige Wahl. |
+   | WiNet-S / inverter | The inverter is connected to the network directly (unit ID 1). |
+   | iHomeManager | Only the values of the iHomeManager (unit ID 247). Daily yield and status are missing in that case. |
+   | iHomeManager + inverter (combined) | The inverter is connected to the iHomeManager. Delivers all values and is the right choice in that case. |
 
-3. **Verbindung testen** drücken. Es erscheint eine Liste, welche Register Werte liefern.
-4. **Speichern**. Der Server verbindet sich sofort neu, ein Neustart ist nicht nötig.
+3. Press **Test connection**. A list shows which registers return values.
+4. **Save**. The server reconnects immediately; no restart is needed.
 
-Die Einstellungen liegen in `settings.json` neben dem Programm und überstehen einen Neustart.
+The settings are stored in `settings.json` next to the program and survive a restart.
+
+## Language
+
+The interface is available in English and German. Switch with the `DE` / `EN`
+button at the top right; the browser remembers the choice. On the first visit
+the language follows the browser. Add `?lang=en` or `?lang=de` to the address to
+force a language.
 
 ## Home Assistant (MQTT)
 
-Voraussetzung in Home Assistant: ein MQTT-Broker (zum Beispiel das Add-on
-„Mosquitto broker") und die MQTT-Integration.
+Required in Home Assistant: an MQTT broker (for example the "Mosquitto broker"
+add-on) and the MQTT integration.
 
-Im Einstellungsformular unter „Home Assistant (MQTT)" den Haken setzen, Broker,
-Benutzer und Passwort eintragen und speichern. In der Statuszeile unten steht
-dann „MQTT: verbunden mit …", und in Home Assistant erscheint das Gerät
-„Sungrow SH15T" automatisch mit elf Sensoren (PV-Leistung, Tagesertrag,
-Batterie-SOC, Batterie- und Netzleistung, Hausverbrauch, Status).
+In the settings form, tick the box under "Home Assistant (MQTT)", enter broker,
+user and password and save. The status line at the bottom then shows
+"MQTT: connected to …", and the device "Sungrow SH15T" appears in Home
+Assistant automatically with eleven sensors (PV power, daily yield, battery SOC,
+battery and grid power, home consumption, status).
 
-Antwortet der Wechselrichter nicht, werden die Sensoren in Home Assistant
-„nicht verfügbar" statt 0.
+If the inverter does not answer, the sensors become "unavailable" in Home
+Assistant instead of showing 0.
 
-## Gut zu wissen
+The sensor names are available in German or English (field "Sensor name
+language"). The entity IDs such as `sensor.sungrow_pv_power` are the same in
+both cases.
 
-- **Port ändern:** `python server.py --port 9000` bzw. die `ExecStart`-Zeile in `deploy/sungrow-dashboard.service` anpassen.
-- **Nur im Heimnetz:** Der Server beantwortet nur Anfragen aus privaten Adressbereichen. Keine Portfreigabe im Router einrichten.
-- **Ein Server pro Anlage:** Nicht zwei Instanzen gleichzeitig gegen dasselbe Gerät laufen lassen.
-- **Vorzeichen:** Batterie positiv = Entladen, Netz positiv = Bezug. Die Kacheln schreiben die Richtung dazu.
-- **Passwort:** Das MQTT-Passwort liegt im Klartext in `settings.json`. Die Datei gehört nicht ins Repository und steht deshalb in der `.gitignore`.
-- **Dienst prüfen (Ubuntu):** `systemctl status sungrow-dashboard`, Log mit `journalctl -u sungrow-dashboard -f`.
+## Good to know
 
-## Mehr Details
+- **Changing the port:** `python server.py --port 9000`, or adjust the `ExecStart` line in `deploy/sungrow-dashboard.service`.
+- **Home network only:** The server only answers requests from private address ranges. Do not set up port forwarding on your router.
+- **One server per system:** Do not run two instances against the same device at the same time.
+- **Signs:** Battery positive = discharging, grid positive = import. The tiles state the direction in words.
+- **Password:** The MQTT password is stored in plain text in `settings.json`. That file does not belong in the repository and is therefore listed in `.gitignore`.
+- **Checking the service (Ubuntu):** `systemctl status sungrow-dashboard`, log with `journalctl -u sungrow-dashboard -f`.
+- **Log language:** The server log is in German.
 
-[docs/technik.md](docs/technik.md) beschreibt die API, die Registerquellen, die
-MQTT-Topics mit allen Entitätsnamen und den Test mit dem mitgelieferten Simulator.
+## More details
+
+[docs/technical.md](docs/technical.md) describes the API, the register sources,
+the MQTT topics with all entity names and testing with the included simulator.

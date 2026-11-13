@@ -22,6 +22,8 @@
   button.primary { background: var(--accent); border-color: var(--accent); color: #1a1200; font-weight: 600; }
   button:disabled { opacity: .5; cursor: default; }
   #gear { padding: 6px 10px; font-size: 1.3rem; line-height: 1; }
+  .head-actions { display: flex; gap: 8px; align-items: center; }
+  #lang { padding: 8px 10px; font-size: .85rem; font-weight: 600; letter-spacing: .04em; }
   main { max-width: 1000px; margin: 0 auto; padding: 0 16px 24px; }
   #banner { display: none; margin-bottom: 14px; padding: 12px 14px; border-radius: 10px;
     background: #3a1c1f; border: 1px solid var(--bad); color: #ffd7d8; }
@@ -86,13 +88,16 @@
 <body>
 <header>
   <h1>Sungrow SH15T</h1>
-  <button id="gear" title="Verbindungseinstellungen" aria-label="Verbindungseinstellungen">&#9881;</button>
+  <div class="head-actions">
+    <button id="lang" title="Sprache / Language" aria-label="Sprache / Language">EN</button>
+    <button id="gear">&#9881;</button>
+  </div>
 </header>
 
 <main>
   <div id="banner"></div>
   <div class="flowcard">
-    <svg id="flow" viewBox="0 0 480 392" role="img" aria-label="Energiefluss zwischen PV, Batterie, Haus und Netz"></svg>
+    <svg id="flow" viewBox="0 0 480 392" role="img"></svg>
   </div>
   <div class="grid" id="grid"></div>
 </main>
@@ -106,16 +111,16 @@
 
 <dialog id="dlg">
   <form id="form" novalidate>
-    <h2>Verbindungseinstellungen</h2>
-    <label for="host">IP-Adresse / Hostname</label>
+    <h2 data-i18n="title_settings"></h2>
+    <label for="host" data-i18n="l_host"></label>
     <input id="host" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" inputmode="url">
     <div class="err" id="e-host"></div>
 
-    <label for="device_type">Gerätetyp</label>
+    <label for="device_type" data-i18n="l_device_type"></label>
     <select id="device_type">
-      <option value="winet">WiNet-S / Wechselrichter</option>
-      <option value="ihm">iHomeManager</option>
-      <option value="combined">iHomeManager + Wechselrichter (kombiniert)</option>
+      <option value="winet" data-i18n="dev_winet"></option>
+      <option value="ihm" data-i18n="dev_ihm"></option>
+      <option value="combined" data-i18n="dev_combined"></option>
     </select>
 
     <div class="row">
@@ -125,23 +130,23 @@
         <div class="err" id="e-port"></div>
       </div>
       <div>
-        <label for="unit_id" id="l-unit_id">Unit-ID</label>
+        <label for="unit_id" id="l-unit_id"></label>
         <input id="unit_id" type="number" min="1" max="247" value="1">
         <div class="err" id="e-unit_id"></div>
       </div>
     </div>
 
-    <label for="interval">Abfrageintervall (Sekunden)</label>
+    <label for="interval" data-i18n="l_interval"></label>
     <input id="interval" type="number" min="2" max="3600" value="10">
     <div class="err" id="e-interval"></div>
 
     <fieldset>
       <legend>Home Assistant (MQTT)</legend>
-      <label class="check"><input type="checkbox" id="mqtt_enabled"> Werte per MQTT veröffentlichen</label>
+      <label class="check"><input type="checkbox" id="mqtt_enabled"> <span data-i18n="mqtt_enable"></span></label>
       <div id="mqttfields" class="off">
         <div class="row">
           <div>
-            <label for="mqtt_host">Broker (IP / Hostname)</label>
+            <label for="mqtt_host" data-i18n="l_broker"></label>
             <input id="mqtt_host" autocomplete="off" spellcheck="false" placeholder="192.168.178.20">
           </div>
           <div>
@@ -152,25 +157,33 @@
         <div class="err" id="e-mqtt_host"></div><div class="err" id="e-mqtt_port"></div>
         <div class="row">
           <div>
-            <label for="mqtt_user">Benutzer</label>
+            <label for="mqtt_user" data-i18n="l_user"></label>
             <input id="mqtt_user" autocomplete="off" spellcheck="false">
           </div>
           <div>
-            <label for="mqtt_password">Passwort</label>
+            <label for="mqtt_password" data-i18n="l_password"></label>
             <input id="mqtt_password" type="password" autocomplete="new-password">
           </div>
         </div>
-        <label for="mqtt_prefix">Topic-Präfix</label>
-        <input id="mqtt_prefix" autocomplete="off" spellcheck="false" value="sungrow">
+        <div class="row">
+          <div>
+            <label for="mqtt_prefix" data-i18n="l_prefix"></label>
+            <input id="mqtt_prefix" autocomplete="off" spellcheck="false" value="sungrow">
+          </div>
+          <div>
+            <label for="mqtt_language" data-i18n="l_mqtt_lang"></label>
+            <select id="mqtt_language"><option value="de">Deutsch</option><option value="en">English</option></select>
+          </div>
+        </div>
         <div class="err" id="e-mqtt_prefix"></div>
       </div>
     </fieldset>
 
     <div class="actions">
-      <button type="button" id="test">Verbindung testen</button>
+      <button type="button" id="test" data-i18n="btn_test"></button>
       <span class="spacer"></span>
-      <button type="button" id="cancel">Abbrechen</button>
-      <button type="submit" class="primary" id="save">Speichern</button>
+      <button type="button" id="cancel" data-i18n="btn_cancel"></button>
+      <button type="submit" class="primary" id="save" data-i18n="btn_save"></button>
     </div>
     <div id="testout"></div>
   </form>
@@ -178,37 +191,125 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const TILES = [
-  ["pv_power", "PV-Leistung"], ["daily_yield", "Tagesertrag"], ["battery_soc", "Batterie-SOC"],
-  ["battery_power", "Batterie-Leistung"], ["grid_power", "Netz"], ["load_power", "Hausverbrauch"],
-  ["status", "Wechselrichter-Status"],
-];
+const TILES = [["pv_power"], ["daily_yield"], ["battery_soc"], ["battery_power"], ["grid_power"],
+  ["load_power"], ["status"]];
 const UNIT_DEFAULT = { winet: 1, ihm: 247, combined: 247 };
 const FIELDS = ["host", "port", "unit_id", "interval", "mqtt_host", "mqtt_port", "mqtt_prefix"];
 let timer = null, intervalSec = 10;
 
+// ---- Sprache (Deutsch / Englisch) ----
+const I18N = {
+  de: {
+    title_settings: "Verbindungseinstellungen", flow_aria: "Energiefluss zwischen PV, Batterie, Haus und Netz",
+    l_host: "IP-Adresse / Hostname", l_device_type: "Gerätetyp", dev_winet: "WiNet-S / Wechselrichter",
+    dev_ihm: "iHomeManager", dev_combined: "iHomeManager + Wechselrichter (kombiniert)",
+    l_unit: "Unit-ID", l_unit_combined: "Unit-ID iHM (WR fest: 1)", l_interval: "Abfrageintervall (Sekunden)",
+    mqtt_enable: "Werte per MQTT veröffentlichen", l_broker: "Broker (IP / Hostname)", l_user: "Benutzer",
+    l_password: "Passwort", l_prefix: "Topic-Präfix", l_mqtt_lang: "Sprache der Sensornamen",
+    btn_test: "Verbindung testen", btn_cancel: "Abbrechen", btn_save: "Speichern",
+    tile_pv_power: "PV-Leistung", tile_daily_yield: "Tagesertrag", tile_battery_soc: "Batterie-SOC",
+    tile_battery_power: "Batterie-Leistung", tile_grid_power: "Netz", tile_load_power: "Hausverbrauch",
+    tile_status: "Wechselrichter-Status",
+    home: "Haus", battery: "Batterie", grid: "Netz", discharging: "Entladen", charging: "Laden", idle: "Ruhe",
+    grid_import: "Netzbezug", grid_export: "Einspeisung", no_exchange: "kein Austausch",
+    no_conn: "keine Verbindung", na: "Wert nicht verfügbar", not_provided: "vom {0} nicht bereitgestellt",
+    calculated: "berechnet", today: "heute", not_configured: "nicht konfiguriert",
+    connected_to: "verbunden mit {0}", no_conn_to: "keine Verbindung zu {0}",
+    last_ok: "Letzte erfolgreiche Abfrage: {0}", none_yet: "noch keine",
+    mqtt_ok: "MQTT: verbunden mit {0}", mqtt_fail: "MQTT: keine Verbindung zu {0}",
+    banner_unconfigured: "Noch keine Verbindung eingerichtet. Bitte über das Zahnrad die IP-Adresse eintragen.",
+    banner_noconn: "Keine Verbindung: {0}", server_down: "Dashboard-Server nicht erreichbar",
+    err_host: "Gültige IPv4-Adresse oder Hostname erforderlich",
+    err_mqtt_host: "Gültige IPv4-Adresse oder Hostname des Brokers erforderlich",
+    err_range: "{0} bis {1}", err_interval: "2 bis 3600 Sekunden", err_mqtt_port: "MQTT-Port: 1 bis 65535",
+    err_prefix: "Nur Buchstaben, Ziffern, _ und -", pw_saved: "gespeichert – leer lassen",
+    testing: "Teste Verbindung …", invalid_input: "Eingaben ungültig.", failed: "Fehlgeschlagen: {0}",
+    test_ok: "Verbindung OK – {0} von {1} Registern liefern Werte:", reg_na: "nicht verfügbar",
+    reg_noresp: "keine Antwort", save_failed: "Speichern fehlgeschlagen: Server nicht erreichbar",
+    reg_device_type_code: "Gerätetyp-Code", reg_pv_power: "PV-Leistung", reg_battery_power: "Batterie-Leistung",
+    reg_status_code: "Status-Code", reg_daily_yield: "Tagesertrag", reg_load_power: "Hausverbrauch",
+    reg_export_power: "Einspeiseleistung (roh)", reg_battery_soc: "Batterie-SOC",
+    reg_ihm_ac_power: "WR-Ausgangsleistung (AC)", reg_ihm_grid_power: "Netzleistung",
+    reg_ihm_battery_power: "Batterie-Leistung", reg_ihm_battery_soc: "Batterie-SOC",
+  },
+  en: {
+    title_settings: "Connection settings", flow_aria: "Energy flow between PV, battery, home and grid",
+    l_host: "IP address / hostname", l_device_type: "Device type", dev_winet: "WiNet-S / inverter",
+    dev_ihm: "iHomeManager", dev_combined: "iHomeManager + inverter (combined)",
+    l_unit: "Unit ID", l_unit_combined: "Unit ID iHM (inverter fixed: 1)", l_interval: "Polling interval (seconds)",
+    mqtt_enable: "Publish values via MQTT", l_broker: "Broker (IP / hostname)", l_user: "User",
+    l_password: "Password", l_prefix: "Topic prefix", l_mqtt_lang: "Sensor name language",
+    btn_test: "Test connection", btn_cancel: "Cancel", btn_save: "Save",
+    tile_pv_power: "PV power", tile_daily_yield: "Daily yield", tile_battery_soc: "Battery SOC",
+    tile_battery_power: "Battery power", tile_grid_power: "Grid", tile_load_power: "Home consumption",
+    tile_status: "Inverter status",
+    home: "Home", battery: "Battery", grid: "Grid", discharging: "Discharging", charging: "Charging", idle: "Idle",
+    grid_import: "Grid import", grid_export: "Feed-in", no_exchange: "no exchange",
+    no_conn: "no connection", na: "Value not available", not_provided: "not provided by {0}",
+    calculated: "calculated", today: "today", not_configured: "not configured",
+    connected_to: "connected to {0}", no_conn_to: "no connection to {0}",
+    last_ok: "Last successful poll: {0}", none_yet: "none yet",
+    mqtt_ok: "MQTT: connected to {0}", mqtt_fail: "MQTT: no connection to {0}",
+    banner_unconfigured: "No connection set up yet. Use the gear icon to enter the IP address.",
+    banner_noconn: "No connection: {0}", server_down: "Dashboard server not reachable",
+    err_host: "Valid IPv4 address or hostname required",
+    err_mqtt_host: "Valid IPv4 address or hostname of the broker required",
+    err_range: "{0} to {1}", err_interval: "2 to 3600 seconds", err_mqtt_port: "MQTT port: 1 to 65535",
+    err_prefix: "Letters, digits, _ and - only", pw_saved: "saved – leave empty",
+    testing: "Testing connection …", invalid_input: "Invalid input.", failed: "Failed: {0}",
+    test_ok: "Connection OK – {0} of {1} registers return values:", reg_na: "not available",
+    reg_noresp: "no response", save_failed: "Saving failed: server not reachable",
+    reg_device_type_code: "Device type code", reg_pv_power: "PV power", reg_battery_power: "Battery power",
+    reg_status_code: "Status code", reg_daily_yield: "Daily yield", reg_load_power: "Home consumption",
+    reg_export_power: "Export power (raw)", reg_battery_soc: "Battery SOC",
+    reg_ihm_ac_power: "Inverter output power (AC)", reg_ihm_grid_power: "Grid power",
+    reg_ihm_battery_power: "Battery power", reg_ihm_battery_soc: "Battery SOC",
+  },
+};
+// Reihenfolge: ?lang= in der Adresse, gespeicherte Wahl, Browsersprache
+let lang = (() => {
+  const q = new URLSearchParams(location.search).get("lang");
+  if (I18N[q]) return q;
+  try { const saved = localStorage.getItem("lang"); if (I18N[saved]) return saved; } catch (e) {}
+  return (navigator.language || "de").toLowerCase().startsWith("de") ? "de" : "en";
+})();
+const t = (key, ...args) => (I18N[lang][key] ?? key).replace(/\{(\d)\}/g, (_, i) => args[i]);
+const locale = () => lang === "de" ? "de-DE" : "en-GB";
+let lastData = null;
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  $("lang").textContent = lang === "de" ? "EN" : "DE";
+  $("gear").title = t("title_settings"); $("gear").setAttribute("aria-label", t("title_settings"));
+  $("flow").setAttribute("aria-label", t("flow_aria"));
+  for (const [key] of TILES) $("t-" + key).querySelector(".label").textContent = t("tile_" + key);
+  $("fcap-home").textContent = t("home");
+  unitLabel();
+  if (lastData) render(lastData);
+}
+
 // ---- Kacheln ----
-for (const [key, label] of TILES) {
-  const t = document.createElement("div");
-  t.className = "tile";
-  t.innerHTML = '<div class="label"></div><div class="value"></div><div class="sub"></div>';
-  t.id = "t-" + key;
-  t.querySelector(".label").textContent = label;
-  if (key === "battery_soc") t.insertAdjacentHTML("beforeend", '<div class="bar"><div></div></div>');
-  $("grid").appendChild(t);
+for (const [key] of TILES) {
+  const tile = document.createElement("div");
+  tile.className = "tile";
+  tile.innerHTML = '<div class="label"></div><div class="value"></div><div class="sub"></div>';
+  tile.id = "t-" + key;
+  if (key === "battery_soc") tile.insertAdjacentHTML("beforeend", '<div class="bar"><div></div></div>');
+  $("grid").appendChild(tile);
 }
 
 function setTile(key, text, unit, sub, cls) {
-  const t = $("t-" + key), v = t.querySelector(".value");
+  const tile = $("t-" + key), v = tile.querySelector(".value");
   v.className = "value" + (cls ? " " + cls : "");
   v.textContent = text;
   if (unit) { const s = document.createElement("small"); s.textContent = unit; v.appendChild(s); }
-  t.querySelector(".sub").textContent = sub || "";
+  tile.querySelector(".sub").textContent = sub || "";
 }
 
 const fmtW = w => Math.abs(w) >= 1000
-  ? [(Math.abs(w) / 1000).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), "kW"]
-  : [Math.abs(w).toLocaleString("de-DE"), "W"];
+  ? [(Math.abs(w) / 1000).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }), "kW"]
+  : [Math.abs(w).toLocaleString(locale()), "W"];
 
 // ---- Energiefluss-Grafik ----
 // Linien in Flussrichtung Quelle -> Ziel; lx/ly/anchor = Position der Beschriftung
@@ -274,7 +375,7 @@ const ICONS = {
     `<g transform="translate(${x} ${y})">${ICONS[id]}</g>`;
   s += node("pv", 240, 75, "--accent") + node("home", 240, 200, "--text") + node("bat", 70, 300, "--good") + node("grid", 410, 300, "--dim");
   s += '<text class="cap" x="240" y="14" text-anchor="middle">PV</text><text class="val" id="fv-pv" x="240" y="37" text-anchor="middle"></text>' +
-       '<text class="cap" x="284" y="192">Haus</text><text class="val" id="fv-home" x="284" y="216"></text>' +
+       '<text class="cap" id="fcap-home" x="284" y="192"></text><text class="val" id="fv-home" x="284" y="216"></text>' +
        '<text class="val" id="fv-bat" x="70" y="358" text-anchor="middle"></text><text class="cap" id="fc-bat" x="70" y="378" text-anchor="middle"></text>' +
        '<text class="val" id="fv-grid" x="410" y="358" text-anchor="middle"></text><text class="cap" id="fc-grid" x="410" y="378" text-anchor="middle"></text>';
   $("flow").innerHTML = s;
@@ -295,9 +396,9 @@ function renderFlow(d) {
   const pv = v.pv_power, bat = v.battery_power, grid = v.grid_power, load = v.load_power;
   svgValue($("fv-pv"), pv); svgValue($("fv-home"), load); svgValue($("fv-bat"), bat); svgValue($("fv-grid"), grid);
   const soc = v.battery_soc;
-  $("fc-bat").textContent = (soc != null ? soc.toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " %" : "Batterie") +
-    (bat > 0 ? " · Entladen" : bat < 0 ? " · Laden" : "");
-  $("fc-grid").textContent = grid > 0 ? "Netzbezug" : grid < 0 ? "Einspeisung" : "Netz";
+  $("fc-bat").textContent = (soc != null ? soc.toLocaleString(locale(), { maximumFractionDigits: 1 }) + " %" : t("battery")) +
+    (bat > 0 ? " · " + t("discharging") : bat < 0 ? " · " + t("charging") : "");
+  $("fc-grid").textContent = grid > 0 ? t("grid_import") : grid < 0 ? t("grid_export") : t("grid");
   // Batterie: vier Segmente nach SOC, Farbe nach Richtung
   const batColor = bat > 0 ? "var(--info)" : "var(--good)";
   for (let i = 0; i < 4; i++) {
@@ -334,60 +435,66 @@ function renderFlow(d) {
 }
 
 function render(d) {
+  lastData = d;
   renderFlow(d);
   const v = d.values || {};
   for (const [key] of TILES) {
     const val = v[key];
-    if (!d.connected) { setTile(key, "keine Verbindung", "", "", "na"); continue; }
+    if (!d.connected) { setTile(key, t("no_conn"), "", "", "na"); continue; }
     if (val === null || val === undefined) {
-      const why = (d.unsupported || []).includes(key) ? "vom " + d.device_label + " nicht bereitgestellt" : "";
-      setTile(key, "Wert nicht verfügbar", "", why, "na");
+      const why = (d.unsupported || []).includes(key) ? t("not_provided", devLabel(d)) : "";
+      setTile(key, t("na"), "", why, "na");
       continue;
     }
-    const calc = (d.derived || []).includes(key) ? "berechnet" : "";
+    const calc = (d.derived || []).includes(key) ? t("calculated") : "";
     if (key === "pv_power") setTile(key, ...fmtW(val), calc, "accent");
     else if (key === "load_power") setTile(key, ...fmtW(val), calc);
-    else if (key === "daily_yield") setTile(key, val.toLocaleString("de-DE", { minimumFractionDigits: 1 }), "kWh", "heute");
-    else if (key === "battery_soc") setTile(key, val.toLocaleString("de-DE", { maximumFractionDigits: 1 }), "%");
+    else if (key === "daily_yield") setTile(key, val.toLocaleString(locale(), { minimumFractionDigits: 1 }), "kWh", t("today"));
+    else if (key === "battery_soc") setTile(key, val.toLocaleString(locale(), { maximumFractionDigits: 1 }), "%");
     else if (key === "battery_power")
-      setTile(key, ...fmtW(val), val > 0 ? "Entladen" : val < 0 ? "Laden" : "Ruhe", val > 0 ? "info" : val < 0 ? "good" : "");
+      setTile(key, ...fmtW(val), val > 0 ? t("discharging") : val < 0 ? t("charging") : t("idle"), val > 0 ? "info" : val < 0 ? "good" : "");
     else if (key === "grid_power")
-      setTile(key, ...fmtW(val), val > 0 ? "Netzbezug" : val < 0 ? "Einspeisung" : "kein Austausch", val > 0 ? "bad" : val < 0 ? "good" : "");
+      setTile(key, ...fmtW(val), val > 0 ? t("grid_import") : val < 0 ? t("grid_export") : t("no_exchange"), val > 0 ? "bad" : val < 0 ? "good" : "");
     else if (key === "status") setTile(key, val, "", v.model || "", /fault|stop|fail/i.test(val) ? "bad" : "");
   }
   const soc = d.connected && v.battery_soc != null ? v.battery_soc : 0;
   document.querySelector("#t-battery_soc .bar > div").style.width = Math.max(0, Math.min(100, soc)) + "%";
 
   $("dot").className = "dot" + (d.connected ? " on" : "");
-  $("conn").textContent = !d.configured ? "nicht konfiguriert"
-    : d.connected ? "verbunden mit " + d.host + ":" + d.port : "keine Verbindung zu " + d.host + ":" + d.port;
-  $("dev").textContent = d.configured ? d.device_label + " (Unit-ID " + d.unit_id + ")" : "";
+  if (d.serverDown) {
+    $("conn").textContent = t("server_down");
+    $("dev").textContent = ""; $("last").textContent = ""; $("mqtt").textContent = "";
+    $("banner").textContent = t("server_down") + "."; $("banner").className = "show";
+    return;
+  }
+  const target = d.host + ":" + d.port;
+  $("conn").textContent = !d.configured ? t("not_configured")
+    : d.connected ? t("connected_to", target) : t("no_conn_to", target);
+  $("dev").textContent = d.configured ? devLabel(d) + " (" + t("l_unit") + " " + d.unit_id + ")" : "";
   $("last").textContent = d.configured
-    ? "Letzte erfolgreiche Abfrage: " + (d.last_success ? new Date(d.last_success).toLocaleTimeString("de-DE") : "noch keine") : "";
+    ? t("last_ok", d.last_success ? new Date(d.last_success).toLocaleTimeString(locale()) : t("none_yet")) : "";
 
   const m = d.mqtt || {};
-  $("mqtt").textContent = !m.enabled ? "" : m.connected ? "MQTT: verbunden mit " + m.broker
-    : "MQTT: keine Verbindung zu " + m.broker + (m.error ? " (" + m.error + ")" : "");
+  $("mqtt").textContent = !m.enabled ? "" : m.connected ? t("mqtt_ok", m.broker)
+    : t("mqtt_fail", m.broker) + (m.error ? " (" + m.error + ")" : "");
 
   const b = $("banner");
-  if (!d.configured) { b.textContent = "Noch keine Verbindung eingerichtet. Bitte über das Zahnrad die IP-Adresse eintragen."; b.className = "show"; }
-  else if (!d.connected && d.error) { b.textContent = "Keine Verbindung: " + d.error; b.className = "show"; }
+  if (!d.configured) { b.textContent = t("banner_unconfigured"); b.className = "show"; }
+  else if (!d.connected && d.error) { b.textContent = t("banner_noconn", d.error); b.className = "show"; }
   else b.className = "";
 }
+const devLabel = d => I18N[lang]["dev_" + d.device_type] || d.device_label || "";
 
 async function refresh() {
   clearTimeout(timer);
   try {
-    const r = await fetch("/api/values", { cache: "no-store" });
+    const r = await fetch("/api/values?lang=" + lang, { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
     intervalSec = d.interval || 10;
     render(d);
   } catch (e) {
-    render({ connected: false, configured: true, host: "?", port: "?", device_label: "", unit_id: "", values: {} });
-    $("conn").textContent = "Dashboard-Server nicht erreichbar";
-    $("dev").textContent = ""; $("last").textContent = ""; $("mqtt").textContent = "";
-    $("banner").textContent = "Dashboard-Server nicht erreichbar."; $("banner").className = "show";
+    render({ serverDown: true, connected: false, configured: true, values: {} });
   }
   timer = setTimeout(refresh, intervalSec * 1000);
 }
@@ -414,21 +521,21 @@ function collect() {
     port: num("port"), unit_id: num("unit_id"), interval: num("interval"),
     mqtt_enabled: $("mqtt_enabled").checked, mqtt_host: $("mqtt_host").value.trim(), mqtt_port: num("mqtt_port"),
     mqtt_user: $("mqtt_user").value.trim(), mqtt_password: $("mqtt_password").value,
-    mqtt_prefix: $("mqtt_prefix").value.trim() || "sungrow" };
+    mqtt_prefix: $("mqtt_prefix").value.trim() || "sungrow", mqtt_language: $("mqtt_language").value };
   const e = {};
-  if (s.mqtt_enabled && !validHost(s.mqtt_host)) e.mqtt_host = "Gültige IPv4-Adresse oder Hostname des Brokers erforderlich";
+  if (s.mqtt_enabled && !validHost(s.mqtt_host)) e.mqtt_host = t("err_mqtt_host");
   if (!s.mqtt_enabled && s.mqtt_host && !validHost(s.mqtt_host)) s.mqtt_host = "";
-  if (!(s.mqtt_port >= 1 && s.mqtt_port <= 65535)) e.mqtt_port = "MQTT-Port: 1 bis 65535";
-  if (!/^[A-Za-z0-9_-]{1,40}$/.test(s.mqtt_prefix)) e.mqtt_prefix = "Nur Buchstaben, Ziffern, _ und -";
-  if (!validHost(s.host)) e.host = "Gültige IPv4-Adresse oder Hostname erforderlich";
-  if (!(s.port >= 1 && s.port <= 65535)) e.port = "1 bis 65535";
-  if (!(s.unit_id >= 1 && s.unit_id <= 247)) e.unit_id = "1 bis 247";
-  if (!(s.interval >= 2 && s.interval <= 3600)) e.interval = "2 bis 3600 Sekunden";
+  if (!(s.mqtt_port >= 1 && s.mqtt_port <= 65535)) e.mqtt_port = t("err_mqtt_port");
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(s.mqtt_prefix)) e.mqtt_prefix = t("err_prefix");
+  if (!validHost(s.host)) e.host = t("err_host");
+  if (!(s.port >= 1 && s.port <= 65535)) e.port = t("err_range", 1, 65535);
+  if (!(s.unit_id >= 1 && s.unit_id <= 247)) e.unit_id = t("err_range", 1, 247);
+  if (!(s.interval >= 2 && s.interval <= 3600)) e.interval = t("err_interval");
   return showErrors(e) ? s : null;
 }
 
 async function post(url, body) {
-  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const r = await fetch(url + "?lang=" + lang, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return r.json();
 }
 
@@ -442,13 +549,14 @@ async function openSettings() {
     $("mqtt_enabled").checked = !!s.mqtt_enabled; $("mqtt_host").value = s.mqtt_host || "";
     $("mqtt_port").value = s.mqtt_port || 1883; $("mqtt_user").value = s.mqtt_user || "";
     $("mqtt_prefix").value = s.mqtt_prefix || "sungrow"; $("mqtt_password").value = "";
-    $("mqtt_password").placeholder = s.mqtt_password_set ? "gespeichert – leer lassen" : "";
+    $("mqtt_language").value = s.mqtt_language || "de";
+    $("mqtt_password").placeholder = s.mqtt_password_set ? t("pw_saved") : "";
     mqttToggle();
   } catch (e) { /* Formular behält seine Werte */ }
   if (!$("dlg").open) $("dlg").showModal();
 }
 
-const unitLabel = () => { $("l-unit_id").textContent = $("device_type").value === "combined" ? "Unit-ID iHM (WR fest: 1)" : "Unit-ID"; };
+const unitLabel = () => { $("l-unit_id").textContent = t($("device_type").value === "combined" ? "l_unit_combined" : "l_unit"); };
 $("device_type").addEventListener("change", () => { $("unit_id").value = UNIT_DEFAULT[$("device_type").value]; unitLabel(); });
 const mqttToggle = () => $("mqttfields").classList.toggle("off", !$("mqtt_enabled").checked);
 $("mqtt_enabled").addEventListener("change", mqttToggle);
@@ -461,28 +569,28 @@ $("test").addEventListener("click", async () => {
   if (!s) return;
   const out = $("testout");
   out.style.display = "block";
-  out.textContent = "Teste Verbindung …";
+  out.textContent = t("testing");
   $("test").disabled = true;
   try {
     const res = await post("/api/test", s);
     out.textContent = "";
     const head = document.createElement("div");
-    if (res.errors) { showErrors(res.errors); head.className = "bad"; head.textContent = "Eingaben ungültig."; out.appendChild(head); return; }
-    if (!res.ok) { head.className = "bad"; head.textContent = "Fehlgeschlagen: " + res.error; out.appendChild(head); return; }
+    if (res.errors) { showErrors(res.errors); head.className = "bad"; head.textContent = t("invalid_input"); out.appendChild(head); return; }
+    if (!res.ok) { head.className = "bad"; head.textContent = t("failed", res.error); out.appendChild(head); return; }
     const got = res.registers.filter(r => r.value !== null).length;
     head.className = got ? "good" : "bad";
-    head.textContent = "Verbindung OK – " + got + " von " + res.registers.length + " Registern liefern Werte:";
+    head.textContent = t("test_ok", got, res.registers.length);
     out.appendChild(head);
     const tb = document.createElement("table");
     for (const r of res.registers) {
       const tr = tb.insertRow();
-      tr.insertCell().textContent = r.label;
+      tr.insertCell().textContent = I18N[lang]["reg_" + r.key] || r.label;
       const c = tr.insertCell(); c.className = "reg"; c.textContent = "Reg. " + r.doc_register + " / ID " + r.unit_id;
-      tr.insertCell().textContent = r.value === null ? (r.raw ? "nicht verfügbar" : "keine Antwort") : r.value + (r.unit ? " " + r.unit : "");
+      tr.insertCell().textContent = r.value === null ? t(r.raw ? "reg_na" : "reg_noresp") : r.value.toLocaleString(locale()) + (r.unit ? " " + r.unit : "");
     }
     out.appendChild(tb);
   } catch (e) {
-    out.textContent = "Dashboard-Server nicht erreichbar.";
+    out.textContent = t("server_down") + ".";
   } finally { $("test").disabled = false; }
 });
 
@@ -497,11 +605,19 @@ $("form").addEventListener("submit", async ev => {
     $("dlg").close();
     setTimeout(refresh, 800);  // Poller verbindet gerade neu
   } catch (e) {
-    $("e-host").textContent = "Speichern fehlgeschlagen: Server nicht erreichbar";
+    $("e-host").textContent = t("save_failed");
   } finally { $("save").disabled = false; }
 });
 
+$("lang").addEventListener("click", () => {
+  lang = lang === "de" ? "en" : "de";
+  try { localStorage.setItem("lang", lang); } catch (e) {}
+  applyLang();
+  refresh();   // Servermeldungen in der neuen Sprache holen
+});
+
 // ---- Start ----
+applyLang();
 (async () => {
   await refresh();
   try {
