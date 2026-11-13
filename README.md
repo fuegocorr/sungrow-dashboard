@@ -101,3 +101,13 @@ both cases.
 
 [docs/technical.md](docs/technical.md) describes the API, the register sources,
 the MQTT topics with all entity names and testing with the included simulator.
+
+## License
+
+[MIT](LICENSE). This project is not affiliated with or endorsed by Sungrow.
+Use at your own risk; the server only reads from the device, but you are
+responsible for what runs on your inverter and network.
+
+The register addresses come from two MIT-licensed projects, see `registers.py`:
+[mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant](https://github.com/mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant)
+and [evcc-io/evcc](https://github.com/evcc-io/evcc).

@@ -95,3 +95,13 @@ Die Namen der Sensoren gibt es auf Deutsch oder Englisch (Feld „Sprache der Se
 
 [docs/technik.md](docs/technik.md) beschreibt die API, die Registerquellen, die
 MQTT-Topics mit allen Entitätsnamen und den Test mit dem mitgelieferten Simulator.
+
+## Lizenz
+
+[MIT](LICENSE). Das Projekt steht in keiner Verbindung zu Sungrow und wird
+von Sungrow nicht unterstützt. Nutzung auf eigene Gefahr; der Server liest nur
+vom Gerät, aber du bist selbst für Wechselrichter und Netzwerk verantwortlich.
+
+Die Registeradressen stammen aus zwei MIT-lizenzierten Projekten, siehe `registers.py`:
+[mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant](https://github.com/mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant)
+und [evcc-io/evcc](https://github.com/evcc-io/evcc).
