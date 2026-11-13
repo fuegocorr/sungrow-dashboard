@@ -1,0 +1,12 @@
+# Einstellungen mit IP und MQTT-Passwort - niemals einchecken
+settings.json
+settings.json.tmp
+
+# Lokale Python-Umgebung und Werkzeuge (Windows)
+.venv/
+.tools/
+__pycache__/
+*.pyc
+
+# Kopie für die Übertragung auf Ubuntu (enthält settings.json)
+Sungrow/

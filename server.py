@@ -1,0 +1,492 @@
+"""Sungrow-SH15T-Dashboard: Modbus-TCP-Poller + FastAPI-Webserver.
+
+Start:  python server.py            (lauscht auf 0.0.0.0:8080)
+        python server.py --port 9000
+
+Es wird ausschließlich gelesen (FC 04, Input-Register). Der Server enthält
+keinen Code für Schreibzugriffe.
+"""
+
+import argparse
+import asyncio
+import inspect
+import ipaddress
+import json
+import logging
+import os
+import re
+import time
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
+from pymodbus.client import AsyncModbusTcpClient
+from pymodbus.exceptions import ModbusException
+
+from mqtt_ha import MqttPublisher
+from registers import DEVICES, build_values, decode
+
+BASE = Path(__file__).resolve().parent
+# Pfad per Umgebungsvariable überschreibbar (z. B. für Tests)
+SETTINGS_FILE = Path(os.environ.get("SUNGROW_SETTINGS") or BASE / "settings.json")
+INDEX_FILE = BASE / "static" / "index.html"
+
+PAUSE = 0.02  # 20 ms Pause zwischen zwei Abfragen
+TIMEOUT = 3  # Sekunden pro Modbus-Anfrage
+SETTLE = 0.5  # Wartezeit nach dem Trennen, bis das Gerät den Client-Platz freigibt
+MQTT_DEFAULTS = {
+    "mqtt_enabled": False,
+    "mqtt_host": "",
+    "mqtt_port": 1883,
+    "mqtt_user": "",
+    "mqtt_password": "",
+    "mqtt_prefix": "sungrow",
+}
+DEFAULTS = {
+    "host": "", "port": 502, "device_type": "winet", "unit_id": 1, "interval": 10, **MQTT_DEFAULTS
+}
+
+log = logging.getLogger("sungrow")
+# Verbindungsfehler meldet der Poller selbst (einmal pro Fehlerursache)
+logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
+
+# pymodbus hat den Parameter für die Unit-ID mehrfach umbenannt
+_params = inspect.signature(AsyncModbusTcpClient.read_input_registers).parameters
+UNIT_KW = next((k for k in ("device_id", "slave", "unit") if k in _params), "slave")
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+# --- Einstellungen ----------------------------------------------------------
+
+_HOSTNAME = re.compile(
+    r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)"
+    r"(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"
+)
+
+
+def valid_host(host: str) -> bool:
+    try:
+        ipaddress.IPv4Address(host)
+        return True
+    except ValueError:
+        pass
+    # Sieht aus wie eine IP (nur Ziffern und Punkte), ist aber keine gültige
+    if re.fullmatch(r"[0-9.]+", host):
+        return False
+    return bool(_HOSTNAME.match(host))
+
+
+def _int(data, key, lo, hi, errors, name):
+    val = data.get(key)
+    if isinstance(val, bool) or not isinstance(val, int) or not lo <= val <= hi:
+        errors[key] = f"{name} muss eine ganze Zahl von {lo} bis {hi} sein"
+        return None
+    return val
+
+
+def validate_settings(data) -> tuple:
+    """Gibt (bereinigte Einstellungen, Fehler-Dict) zurück."""
+    errors = {}
+    if not isinstance(data, dict):
+        return None, {"body": "JSON-Objekt erwartet"}
+
+    host = data.get("host")
+    host = host.strip() if isinstance(host, str) else ""
+    if not valid_host(host):
+        errors["host"] = "Gültige IPv4-Adresse oder Hostname erforderlich"
+
+    device_type = data.get("device_type")
+    if device_type not in DEVICES:
+        errors["device_type"] = "Gerätetyp muss 'winet', 'ihm' oder 'combined' sein"
+
+    data = dict(data)
+    data.setdefault("port", DEFAULTS["port"])
+    data.setdefault("interval", DEFAULTS["interval"])
+    if data.get("unit_id") is None and device_type in DEVICES:
+        data["unit_id"] = DEVICES[device_type]["unit_id"]
+
+    port = _int(data, "port", 1, 65535, errors, "Port")
+    unit_id = _int(data, "unit_id", 1, 247, errors, "Unit-ID")
+    interval = _int(data, "interval", 2, 3600, errors, "Abfrageintervall")
+    mqtt = _validate_mqtt(data, errors)
+    if errors:
+        return None, errors
+    return {
+        "host": host,
+        "port": port,
+        "device_type": device_type,
+        "unit_id": unit_id,
+        "interval": interval,
+        **mqtt,
+    }, {}
+
+
+def _validate_mqtt(data: dict, errors: dict) -> dict:
+    m = {k: data.get(k, default) for k, default in MQTT_DEFAULTS.items()}
+    if not isinstance(m["mqtt_enabled"], bool):
+        errors["mqtt_enabled"] = "true oder false erwartet"
+    for key in ("mqtt_host", "mqtt_user", "mqtt_password", "mqtt_prefix"):
+        if not isinstance(m[key], str) or len(m[key]) > 200:
+            errors[key] = "Text mit höchstens 200 Zeichen erwartet"
+            m[key] = ""
+    m["mqtt_host"] = m["mqtt_host"].strip()
+    m["mqtt_user"] = m["mqtt_user"].strip()
+    m["mqtt_prefix"] = m["mqtt_prefix"].strip() or MQTT_DEFAULTS["mqtt_prefix"]
+    if (m["mqtt_enabled"] is True or m["mqtt_host"]) and not valid_host(m["mqtt_host"]):
+        errors.setdefault("mqtt_host", "Gültige IPv4-Adresse oder Hostname des Brokers erforderlich")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", m["mqtt_prefix"]):
+        errors.setdefault("mqtt_prefix", "Nur Buchstaben, Ziffern, _ und - (höchstens 40 Zeichen)")
+    port = m["mqtt_port"]
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        errors["mqtt_port"] = "MQTT-Port muss eine ganze Zahl von 1 bis 65535 sein"
+    if not m["mqtt_user"]:
+        m["mqtt_password"] = ""  # ohne Benutzer kein Passwort
+    return m
+
+
+def public_settings(settings: dict) -> dict:
+    """Einstellungen für den Browser: das MQTT-Passwort verlässt den Server nicht."""
+    out = {k: v for k, v in settings.items() if k != "mqtt_password"}
+    out["mqtt_password_set"] = bool(settings.get("mqtt_password"))
+    return out
+
+
+def load_settings() -> dict:
+    try:
+        data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        clean, errors = validate_settings(data)
+        if clean:
+            return clean
+        log.warning("settings.json ungültig, wird ignoriert: %s", errors)
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError) as exc:
+        log.warning("settings.json nicht lesbar: %s", exc)
+    return dict(DEFAULTS)
+
+
+def save_settings(settings: dict) -> None:
+    tmp = SETTINGS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)  # enthält ggf. das MQTT-Passwort
+    except OSError:
+        pass
+    os.replace(tmp, SETTINGS_FILE)
+
+
+# --- Modbus -----------------------------------------------------------------
+
+
+class LinkError(Exception):
+    """Verbindung zum Gerät ist nicht (mehr) nutzbar."""
+
+
+async def open_client(host: str, port: int) -> AsyncModbusTcpClient:
+    # reconnect_delay=0: pymodbus verbindet nicht selbst neu, das macht der Poller
+    client = AsyncModbusTcpClient(
+        host, port=port, timeout=TIMEOUT, retries=1, reconnect_delay=0
+    )
+    try:
+        ok = await client.connect()
+    except Exception as exc:  # DNS-Fehler, Netz nicht erreichbar, ...
+        await close_client(client)
+        raise LinkError(f"Verbindung zu {host}:{port} fehlgeschlagen ({exc})") from exc
+    if not ok:
+        await close_client(client)
+        raise LinkError(f"Verbindung zu {host}:{port} fehlgeschlagen")
+    return client
+
+
+async def close_client(client) -> None:
+    if client is None:
+        return
+    try:
+        res = client.close()
+        if inspect.isawaitable(res):
+            await res
+    except Exception:
+        pass
+
+
+async def read_words(client, address: int, count: int, unit_id: int):
+    """Liest Input-Register (FC 04). None = Gerät lehnt das Register ab."""
+    try:
+        rr = await client.read_input_registers(address, count=count, **{UNIT_KW: unit_id})
+    except (ModbusException, asyncio.TimeoutError, OSError) as exc:
+        raise LinkError(f"Keine Antwort auf Register {address} ({exc})") from exc
+    finally:
+        await asyncio.sleep(PAUSE)
+    if rr.isError() or len(getattr(rr, "registers", [])) < count:
+        return None
+    return rr.registers
+
+
+async def read_registers(client, device_type: str, unit_id: int) -> tuple:
+    """Liest alle Register der Map. Gibt (dekodiert, Details) zurück."""
+    regs = DEVICES[device_type]["registers"]
+    blocks, decoded, details = {}, {}, []
+    answered = 0
+    for reg in regs:
+        unit = reg.unit_id or unit_id
+        if reg.block:
+            bkey = (reg.block, unit)
+            if bkey not in blocks:
+                blocks[bkey] = await read_words(client, reg.block[0], reg.block[1], unit)
+            data = blocks[bkey]
+            off = reg.address - reg.block[0]
+            words = None if data is None else data[off : off + reg.count]
+        else:
+            words = await read_words(client, reg.address, reg.count, unit)
+        value = None
+        if words is not None:
+            answered += 1
+            value = decode(reg, words)
+        decoded[reg.key] = value
+        details.append(
+            {
+                "key": reg.key,
+                "label": reg.label,
+                "address": reg.address,
+                "doc_register": reg.address + 1,
+                "unit_id": unit,
+                "raw": words,
+                "value": value,
+                "unit": reg.unit,
+            }
+        )
+    if answered == 0:
+        raise LinkError(
+            f"Gerät antwortet auf kein Register (Unit-ID {unit_id} / Gerätetyp prüfen)"
+        )
+    return decoded, details
+
+
+class Poller:
+    """Hält EINE dauerhafte Modbus-Verbindung und pollt im Hintergrund."""
+
+    def __init__(self):
+        self.settings = load_settings()
+        self.client = None
+        self.closed_at = 0.0
+        self.lock = asyncio.Lock()  # schützt die eine Verbindung zum Gerät
+        self.wake = asyncio.Event()
+        self.connected = False
+        self.error = None
+        self.last_success = None
+        self.result = build_values(self.settings["device_type"], {})
+        self.mqtt = MqttPublisher()
+
+    def snapshot(self) -> dict:
+        s = self.settings
+        return {
+            "timestamp": now_iso(),
+            "configured": bool(s["host"]),
+            "connected": self.connected,
+            "error": self.error,
+            "last_success": self.last_success,
+            "host": s["host"],
+            "port": s["port"],
+            "device_type": s["device_type"],
+            "device_label": DEVICES[s["device_type"]]["label"],
+            "unit_id": s["unit_id"],
+            "interval": s["interval"],
+            "mqtt": self.mqtt.status(),
+            **self.result,
+        }
+
+    async def _drop(self, error=None):
+        if self.client is not None:
+            await close_client(self.client)
+            self.closed_at = time.monotonic()
+        self.client = None
+        self.connected = False
+        self.error = error
+        self.result = build_values(self.settings["device_type"], {})
+
+    async def _open(self, host, port):
+        """Verbinden; vorher abwarten, bis das Gerät die alte Verbindung freigegeben hat."""
+        wait = self.closed_at + SETTLE - time.monotonic()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        return await open_client(host, port)
+
+    async def apply(self, settings: dict):
+        """Neue Einstellungen übernehmen: alte Verbindung trennen, neu verbinden."""
+        async with self.lock:
+            self.settings = settings
+            self.last_success = None
+            await self._drop()
+        await asyncio.to_thread(self.mqtt.configure, settings)
+        self.wake.set()
+
+    async def test(self, settings: dict) -> dict:
+        """Verbindungstest. Trennt vorher die Poller-Verbindung, weil Sungrow
+        nur einen Client gleichzeitig verträgt; der Poller verbindet danach neu."""
+        async with self.lock:
+            await self._drop()
+            client = None
+            try:
+                client = await self._open(settings["host"], settings["port"])
+                decoded, details = await read_registers(
+                    client, settings["device_type"], settings["unit_id"]
+                )
+                return {
+                    "ok": True,
+                    "registers": details,
+                    **build_values(settings["device_type"], decoded),
+                }
+            except LinkError as exc:
+                return {"ok": False, "error": str(exc)}
+            finally:
+                if client is not None:
+                    await close_client(client)
+                    self.closed_at = time.monotonic()
+                self.wake.set()
+
+    async def _cycle(self):
+        s = self.settings
+        async with self.lock:
+            if s is not self.settings:  # währenddessen geändert
+                return
+            try:
+                if self.client is None or not self.client.connected:
+                    await self._drop(self.error)
+                    self.client = await self._open(s["host"], s["port"])
+                    log.info("Verbunden mit %s:%s", s["host"], s["port"])
+                decoded, _ = await read_registers(self.client, s["device_type"], s["unit_id"])
+                self.result = build_values(s["device_type"], decoded)
+                self.connected = True
+                self.error = None
+                self.last_success = now_iso()
+            except LinkError as exc:
+                if self.error != str(exc):
+                    log.warning("%s", exc)
+                await self._drop(str(exc))
+
+    async def run(self):
+        await asyncio.to_thread(self.mqtt.configure, self.settings)
+        while True:
+            self.wake.clear()
+            delay = None  # ohne Konfiguration: warten, bis gespeichert wird
+            if self.settings["host"]:
+                try:
+                    await self._cycle()
+                except Exception:  # Poller darf nie sterben
+                    log.exception("Unerwarteter Fehler im Poller")
+                    await self._drop("Interner Fehler, siehe Server-Log")
+                self.mqtt.publish(self.snapshot())
+                delay = self.settings["interval"]
+            try:
+                await asyncio.wait_for(self.wake.wait(), timeout=delay)
+            except asyncio.TimeoutError:
+                pass
+
+    async def stop(self):
+        async with self.lock:
+            await self._drop()
+        await asyncio.to_thread(self.mqtt.stop)
+
+
+# --- Web --------------------------------------------------------------------
+
+poller: Poller = None
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    global poller
+    poller = Poller()
+    task = asyncio.create_task(poller.run())
+    yield
+    task.cancel()
+    await poller.stop()
+
+
+app = FastAPI(
+    title="Sungrow Dashboard", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
+)
+
+
+@app.middleware("http")
+async def local_only(request: Request, call_next):
+    """Nur Clients aus dem lokalen Netz zulassen (privat, link-local, loopback)."""
+    try:
+        ip = ipaddress.ip_address(request.client.host)
+        if getattr(ip, "ipv4_mapped", None):
+            ip = ip.ipv4_mapped
+        allowed = ip.is_private or ip.is_loopback or ip.is_link_local
+    except (ValueError, AttributeError):
+        allowed = False
+    if not allowed:
+        return JSONResponse({"error": "Nur im lokalen Netz erreichbar"}, status_code=403)
+    return await call_next(request)
+
+
+async def _body(request: Request):
+    try:
+        return await request.json()
+    except ValueError:
+        return None
+
+
+@app.get("/")
+async def index():
+    return FileResponse(INDEX_FILE, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/values")
+async def api_values():
+    return JSONResponse(poller.snapshot(), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/settings")
+async def api_get_settings():
+    return {
+        "settings": public_settings(poller.settings),
+        "configured": bool(poller.settings["host"]),
+        "device_types": {k: {"label": d["label"], "unit_id": d["unit_id"]} for k, d in DEVICES.items()},
+    }
+
+
+@app.post("/api/settings")
+async def api_post_settings(request: Request):
+    body = await _body(request)
+    if isinstance(body, dict) and not body.get("mqtt_password"):
+        # leer/fehlend = gespeichertes Passwort behalten
+        body = {**body, "mqtt_password": poller.settings.get("mqtt_password", "")}
+    settings, errors = validate_settings(body)
+    if errors:
+        return JSONResponse({"ok": False, "errors": errors}, status_code=422)
+    try:
+        save_settings(settings)
+    except OSError as exc:
+        return JSONResponse(
+            {"ok": False, "errors": {"body": f"settings.json nicht schreibbar: {exc}"}},
+            status_code=500,
+        )
+    await poller.apply(settings)
+    return {"ok": True, "settings": public_settings(settings)}
+
+
+@app.post("/api/test")
+async def api_test(request: Request):
+    settings, errors = validate_settings(await _body(request))
+    if errors:
+        return JSONResponse({"ok": False, "errors": errors}, status_code=422)
+    return await poller.test(settings)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Sungrow-Dashboard")
+    parser.add_argument("--host", default="0.0.0.0", help="Bind-Adresse (Standard 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8080)
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    uvicorn.run(app, host=args.host, port=args.port)

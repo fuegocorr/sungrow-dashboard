@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Sungrow SH15T</title>
+<style>
+  :root {
+    --bg: #0e1116; --card: #171c24; --line: #262d38; --text: #e8ecf1; --dim: #8a94a3;
+    --accent: #f5a524; --good: #3ecf8e; --bad: #f2555a; --info: #5aa9f7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between;
+    padding: 16px; max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 1.15rem; margin: 0; font-weight: 600; }
+  button { font: inherit; color: var(--text); background: var(--card);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+  button:hover { border-color: var(--dim); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1200; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  #gear { padding: 6px 10px; font-size: 1.3rem; line-height: 1; }
+  main { max-width: 1000px; margin: 0 auto; padding: 0 16px 24px; }
+  #banner { display: none; margin-bottom: 14px; padding: 12px 14px; border-radius: 10px;
+    background: #3a1c1f; border: 1px solid var(--bad); color: #ffd7d8; }
+  #banner.show { display: block; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-height: 124px; }
+  .tile .label { color: var(--dim); font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }
+  .tile .value { font-size: 2rem; font-weight: 650; margin-top: 6px; font-variant-numeric: tabular-nums; word-break: break-word; }
+  .tile .value small { font-size: 1rem; font-weight: 500; color: var(--dim); margin-left: 4px; }
+  .tile .value.na { font-size: 1.05rem; font-weight: 500; color: var(--dim); padding-top: 10px; }
+  .tile .sub { color: var(--dim); font-size: .85rem; margin-top: 4px; min-height: 1.2em; }
+  .good { color: var(--good); } .bad { color: var(--bad); } .info { color: var(--info); } .accent { color: var(--accent); }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--good); width: 0; transition: width .4s; }
+  .flowcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 8px; margin-bottom: 12px; }
+  #flow { display: block; width: 100%; max-width: 600px; margin: 0 auto; height: auto; }
+  #flow .base { fill: none; stroke: #1e2530; stroke-width: 7; stroke-linecap: round; }
+  #flow .flow { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 16 20;
+    animation: dash 1.1s linear infinite; display: none; filter: drop-shadow(0 0 4px currentColor); }
+  #flow .flow.on { display: inline; }
+  #flow .flow.rev { animation-direction: reverse; }
+  @keyframes dash { to { stroke-dashoffset: -36; } }
+  @media (prefers-reduced-motion: reduce) { #flow .flow { animation: none; stroke-dasharray: none; } }
+  #flow .glow { transition: opacity .4s; }
+  #flow .seg { transition: opacity .4s, fill .4s; }
+  #flow text { fill: var(--text); font-variant-numeric: tabular-nums; }
+  #flow .val { font-size: 22px; font-weight: 650; }
+  #flow .val .u, #flow .lbl .u { font-size: 14px; font-weight: 500; fill: var(--dim); }
+  #flow .cap { font-size: 13px; fill: var(--dim); }
+  #flow .lbl { font-size: 15px; font-weight: 600; }
+  footer { max-width: 1000px; margin: 0 auto; padding: 0 16px 28px; color: var(--dim); font-size: .88rem;
+    display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); margin-right: 6px; }
+  .dot.on { background: var(--good); }
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px; width: min(440px, calc(100vw - 24px)); }
+  dialog::backdrop { background: rgba(0, 0, 0, .65); }
+  dialog h2 { margin: 0 0 14px; font-size: 1.1rem; }
+  label { display: block; font-size: .85rem; color: var(--dim); margin: 12px 0 4px; }
+  input, select { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
+  input:focus, select:focus { outline: 2px solid var(--info); outline-offset: -1px; }
+  input.invalid { border-color: var(--bad); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .err { color: var(--bad); font-size: .82rem; min-height: 1em; margin-top: 3px; }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 16px 0 0; padding: 4px 12px 12px; }
+  legend { color: var(--dim); font-size: .85rem; padding: 0 6px; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: .95rem; margin-top: 8px; }
+  .check input { width: auto; }
+  #mqttfields.off { display: none; }
+  dialog { max-height: calc(100vh - 24px); overflow-y: auto; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .actions .spacer { flex: 1; }
+  #testout { margin-top: 14px; font-size: .88rem; display: none; border-top: 1px solid var(--line); padding-top: 12px; }
+  #testout table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  #testout td { padding: 3px 0; border-bottom: 1px solid var(--line); }
+  #testout td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  #testout td.reg { color: var(--dim); padding: 3px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sungrow SH15T</h1>
+  <button id="gear" title="Verbindungseinstellungen" aria-label="Verbindungseinstellungen">&#9881;</button>
+</header>
+
+<main>
+  <div id="banner"></div>
+  <div class="flowcard">
+    <svg id="flow" viewBox="0 0 480 392" role="img" aria-label="Energiefluss zwischen PV, Batterie, Haus und Netz"></svg>
+  </div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<footer>
+  <span><span class="dot" id="dot"></span><span id="conn">–</span></span>
+  <span id="dev"></span>
+  <span id="last"></span>
+  <span id="mqtt"></span>
+</footer>
+
+<dialog id="dlg">
+  <form id="form" novalidate>
+    <h2>Verbindungseinstellungen</h2>
+    <label for="host">IP-Adresse / Hostname</label>
+    <input id="host" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" inputmode="url">
+    <div class="err" id="e-host"></div>
+
+    <label for="device_type">Gerätetyp</label>
+    <select id="device_type">
+      <option value="winet">WiNet-S / Wechselrichter</option>
+      <option value="ihm">iHomeManager</option>
+      <option value="combined">iHomeManager + Wechselrichter (kombiniert)</option>
+    </select>
+
+    <div class="row">
+      <div>
+        <label for="port">Port</label>
+        <input id="port" type="number" min="1" max="65535" value="502">
+        <div class="err" id="e-port"></div>
+      </div>
+      <div>
+        <label for="unit_id" id="l-unit_id">Unit-ID</label>
+        <input id="unit_id" type="number" min="1" max="247" value="1">
+        <div class="err" id="e-unit_id"></div>
+      </div>
+    </div>
+
+    <label for="interval">Abfrageintervall (Sekunden)</label>
+    <input id="interval" type="number" min="2" max="3600" value="10">
+    <div class="err" id="e-interval"></div>
+
+    <fieldset>
+      <legend>Home Assistant (MQTT)</legend>
+      <label class="check"><input type="checkbox" id="mqtt_enabled"> Werte per MQTT veröffentlichen</label>
+      <div id="mqttfields" class="off">
+        <div class="row">
+          <div>
+            <label for="mqtt_host">Broker (IP / Hostname)</label>
+            <input id="mqtt_host" autocomplete="off" spellcheck="false" placeholder="192.168.178.20">
+          </div>
+          <div>
+            <label for="mqtt_port">Port</label>
+            <input id="mqtt_port" type="number" min="1" max="65535" value="1883">
+          </div>
+        </div>
+        <div class="err" id="e-mqtt_host"></div><div class="err" id="e-mqtt_port"></div>
+        <div class="row">
+          <div>
+            <label for="mqtt_user">Benutzer</label>
+            <input id="mqtt_user" autocomplete="off" spellcheck="false">
+          </div>
+          <div>
+            <label for="mqtt_password">Passwort</label>
+            <input id="mqtt_password" type="password" autocomplete="new-password">
+          </div>
+        </div>
+        <label for="mqtt_prefix">Topic-Präfix</label>
+        <input id="mqtt_prefix" autocomplete="off" spellcheck="false" value="sungrow">
+        <div class="err" id="e-mqtt_prefix"></div>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button type="button" id="test">Verbindung testen</button>
+      <span class="spacer"></span>
+      <button type="button" id="cancel">Abbrechen</button>
+      <button type="submit" class="primary" id="save">Speichern</button>
+    </div>
+    <div id="testout"></div>
+  </form>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+const TILES = [
+  ["pv_power", "PV-Leistung"], ["daily_yield", "Tagesertrag"], ["battery_soc", "Batterie-SOC"],
+  ["battery_power", "Batterie-Leistung"], ["grid_power", "Netz"], ["load_power", "Hausverbrauch"],
+  ["status", "Wechselrichter-Status"],
+];
+const UNIT_DEFAULT = { winet: 1, ihm: 247, combined: 247 };
+const FIELDS = ["host", "port", "unit_id", "interval", "mqtt_host", "mqtt_port", "mqtt_prefix"];
+let timer = null, intervalSec = 10;
+
+// ---- Kacheln ----
+for (const [key, label] of TILES) {
+  const t = document.createElement("div");
+  t.className = "tile";
+  t.innerHTML = '<div class="label"></div><div class="value"></div><div class="sub"></div>';
+  t.id = "t-" + key;
+  t.querySelector(".label").textContent = label;
+  if (key === "battery_soc") t.insertAdjacentHTML("beforeend", '<div class="bar"><div></div></div>');
+  $("grid").appendChild(t);
+}
+
+function setTile(key, text, unit, sub, cls) {
+  const t = $("t-" + key), v = t.querySelector(".value");
+  v.className = "value" + (cls ? " " + cls : "");
+  v.textContent = text;
+  if (unit) { const s = document.createElement("small"); s.textContent = unit; v.appendChild(s); }
+  t.querySelector(".sub").textContent = sub || "";
+}
+
+const fmtW = w => Math.abs(w) >= 1000
+  ? [(Math.abs(w) / 1000).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), "kW"]
+  : [Math.abs(w).toLocaleString("de-DE"), "W"];
+
+// ---- Energiefluss-Grafik ----
+// Linien in Flussrichtung Quelle -> Ziel; lx/ly/anchor = Position der Beschriftung
+const LINES = {
+  pv_bat:   { d: "M208 75 H90 a20 20 0 0 0 -20 20 V268",    c: "--good",   lx: 82,  ly: 170, a: "start" },
+  pv_home:  { d: "M240 107 V168",                           c: "--accent", lx: 250, ly: 143, a: "start" },
+  pv_grid:  { d: "M272 75 H390 a20 20 0 0 1 20 20 V268",    c: "--good",   lx: 398, ly: 170, a: "end" },
+  bat_home: { d: "M96 292 H200 a20 20 0 0 0 20 -20 V232",  c: "--info",   lx: 150, ly: 284, a: "middle" },
+  grid_home:{ d: "M386 292 H280 a20 20 0 0 1 -20 -20 V232", c: "--bad",    lx: 330, ly: 284, a: "middle" },
+  bat_grid: { d: "M96 314 H386",                            c: "--info",   lx: 240, ly: 334, a: "middle" },
+};
+const DEFS = `<defs>
+  <linearGradient id="g-panel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4f8fe8"/><stop offset="1" stop-color="#1b3566"/></linearGradient>
+  <linearGradient id="g-body" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3a4558"/><stop offset="1" stop-color="#232b39"/></linearGradient>
+  <linearGradient id="g-roof" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d6b84"/><stop offset="1" stop-color="#3d485c"/></linearGradient>
+  <linearGradient id="g-wall" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e3e8f0"/><stop offset="1" stop-color="#b3bccb"/></linearGradient>
+  <radialGradient id="g-sun"><stop offset="0" stop-color="#ffd76a"/><stop offset="1" stop-color="#f5a524"/></radialGradient>
+  <radialGradient id="g-halo"><stop offset="0" stop-color="currentColor" stop-opacity=".30"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient>
+</defs>`;
+const ICONS = {
+  // Solarmodul, schräg gestellt, mit Sonne
+  pv: `<g transform="translate(46 -15)"><circle r="14" fill="#f5a524" opacity=".18"/><circle r="8" fill="url(#g-sun)"/></g>
+    <ellipse cx="0" cy="31" rx="20" ry="4" fill="#000" opacity=".35"/>
+    <path d="M-2 14 L-2 29 M2 14 L2 29" stroke="#8a94a3" stroke-width="2.5" stroke-linecap="round"/>
+    <g transform="skewX(-16)">
+      <rect x="-30" y="-20" width="60" height="36" rx="3" fill="url(#g-panel)" stroke="#9cc4ff" stroke-width="1.5"/>
+      <path d="M-15 -20 V16 M0 -20 V16 M15 -20 V16 M-30 -8 H30 M-30 4 H30" stroke="#cfe2ff" stroke-opacity=".45" stroke-width="1"/>
+      <path d="M-28 -18 H-4 L-16 -6 H-28 Z" fill="#fff" opacity=".12"/>
+    </g>`,
+  // Haus mit beleuchteten Fenstern
+  home: `<ellipse cx="0" cy="27" rx="32" ry="5" fill="#000" opacity=".35"/>
+    <rect x="13" y="-27" width="7" height="14" fill="#5d6b84"/>
+    <rect x="-23" y="-5" width="46" height="31" rx="2" fill="url(#g-wall)"/>
+    <path d="M-31 -3 L0 -30 L31 -3 Z" fill="url(#g-roof)" stroke="#7a889f" stroke-width="1.5" stroke-linejoin="round"/>
+    <rect x="-5" y="8" width="10" height="18" rx="1" fill="#4a5568"/>
+    <rect x="-18" y="3" width="9" height="9" rx="1" fill="#ffc94d"/><rect x="9" y="3" width="9" height="9" rx="1" fill="#ffc94d"/>
+    <circle cx="0" cy="-13" r="3.5" fill="#2a3342"/>`,
+  // Batteriespeicher als Turm mit vier Füllstands-Segmenten
+  bat: `<ellipse cx="0" cy="32" rx="22" ry="4.5" fill="#000" opacity=".35"/>
+    <rect x="-19" y="-31" width="38" height="62" rx="7" fill="url(#g-body)" stroke="#55627a" stroke-width="1.5"/>
+    <rect x="-11" y="-26" width="22" height="3" rx="1.5" fill="#55627a"/>
+    <rect class="seg" id="f-seg3" x="-13" y="-18" width="26" height="9" rx="2.5"/>
+    <rect class="seg" id="f-seg2" x="-13" y="-6" width="26" height="9" rx="2.5"/>
+    <rect class="seg" id="f-seg1" x="-13" y="6" width="26" height="9" rx="2.5"/>
+    <rect class="seg" id="f-seg0" x="-13" y="18" width="26" height="9" rx="2.5"/>`,
+  // Strommast
+  grid: `<ellipse cx="0" cy="31" rx="22" ry="4.5" fill="#000" opacity=".35"/>
+    <g id="f-pylon" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 -32 L-15 30 M0 -32 L15 30 M-21 -19 H21 M-17 -6 H17"/>
+      <path d="M-21 -19 L-4.5 -13 M21 -19 L4.5 -13 M-17 -6 L-7.5 -1 M17 -6 L7.5 -1" stroke-width="1.4"/>
+      <path d="M-6.3 -6 L10.6 12 M6.3 -6 L-10.6 12 M-10.6 12 H10.6 M-10.6 12 L15 30 M10.6 12 L-15 30" stroke-width="1.4"/>
+      <path d="M-21 -19 V-14 M21 -19 V-14 M-17 -6 V-1 M17 -6 V-1" stroke-width="1.4"/>
+    </g>
+    <g id="f-ins"><circle cx="-21" cy="-12.5" r="2"/><circle cx="21" cy="-12.5" r="2"/><circle cx="-17" cy="0.5" r="2"/><circle cx="17" cy="0.5" r="2"/></g>`,
+};
+(function buildFlow() {
+  let s = DEFS;
+  for (const [id, l] of Object.entries(LINES))
+    s += `<path class="base" d="${l.d}"/><path class="flow" id="f-${id}" d="${l.d}" style="color:var(${l.c});stroke:currentColor"/>` +
+         `<text class="lbl" id="fl-${id}" x="${l.lx}" y="${l.ly}" text-anchor="${l.a}"></text>`;
+  const node = (id, x, y, color) =>
+    `<circle class="glow" id="fg-${id}" cx="${x}" cy="${y}" r="52" fill="url(#g-halo)" style="color:var(${color})"/>` +
+    `<g transform="translate(${x} ${y})">${ICONS[id]}</g>`;
+  s += node("pv", 240, 75, "--accent") + node("home", 240, 200, "--text") + node("bat", 70, 300, "--good") + node("grid", 410, 300, "--dim");
+  s += '<text class="cap" x="240" y="14" text-anchor="middle">PV</text><text class="val" id="fv-pv" x="240" y="37" text-anchor="middle"></text>' +
+       '<text class="cap" x="284" y="192">Haus</text><text class="val" id="fv-home" x="284" y="216"></text>' +
+       '<text class="val" id="fv-bat" x="70" y="358" text-anchor="middle"></text><text class="cap" id="fc-bat" x="70" y="378" text-anchor="middle"></text>' +
+       '<text class="val" id="fv-grid" x="410" y="358" text-anchor="middle"></text><text class="cap" id="fc-grid" x="410" y="378" text-anchor="middle"></text>';
+  $("flow").innerHTML = s;
+})();
+
+function svgValue(el, w) {
+  el.textContent = "";
+  if (w === null || w === undefined) { el.textContent = "–"; return; }
+  const [num, unit] = fmtW(w);
+  el.textContent = num;
+  const u = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+  u.setAttribute("class", "u"); u.setAttribute("dx", "4"); u.textContent = unit;
+  el.appendChild(u);
+}
+
+function renderFlow(d) {
+  const v = d.connected ? (d.values || {}) : {};
+  const pv = v.pv_power, bat = v.battery_power, grid = v.grid_power, load = v.load_power;
+  svgValue($("fv-pv"), pv); svgValue($("fv-home"), load); svgValue($("fv-bat"), bat); svgValue($("fv-grid"), grid);
+  const soc = v.battery_soc;
+  $("fc-bat").textContent = (soc != null ? soc.toLocaleString("de-DE", { maximumFractionDigits: 1 }) + " %" : "Batterie") +
+    (bat > 0 ? " · Entladen" : bat < 0 ? " · Laden" : "");
+  $("fc-grid").textContent = grid > 0 ? "Netzbezug" : grid < 0 ? "Einspeisung" : "Netz";
+  // Batterie: vier Segmente nach SOC, Farbe nach Richtung
+  const batColor = bat > 0 ? "var(--info)" : "var(--good)";
+  for (let i = 0; i < 4; i++) {
+    const frac = soc != null ? Math.max(0, Math.min(1, soc / 25 - i)) : 0, seg = $("f-seg" + i);
+    seg.style.fill = frac > 0 ? batColor : "#55627a";
+    seg.style.opacity = frac > 0 ? 0.35 + 0.65 * frac : 0.35;
+  }
+  const gridColor = grid > 0 ? "var(--bad)" : grid < 0 ? "var(--good)" : "#9aa7ba";
+  $("f-pylon").style.stroke = gridColor; $("f-ins").style.fill = gridColor;
+  // Leuchten hinter aktiven Symbolen
+  const glow = (id, on, color) => { $("fg-" + id).style.opacity = on ? 1 : 0; if (color) $("fg-" + id).style.color = color; };
+  glow("pv", pv > 30); glow("home", load > 30); glow("bat", Math.abs(bat) > 30, batColor); glow("grid", Math.abs(grid) > 30, gridColor);
+
+  // Aufteilung der Flüsse aus der Leistungsbilanz (PV versorgt zuerst das Haus)
+  const f = {};
+  if ([pv, bat, grid, load].every(x => x !== null && x !== undefined)) {
+    const P = Math.max(0, pv), L = Math.max(0, load);
+    const chg = Math.max(0, -bat), dis = Math.max(0, bat), imp = Math.max(0, grid), exp = Math.max(0, -grid);
+    f.pv_home = Math.min(P, L);
+    f.pv_bat = Math.min(P - f.pv_home, chg);
+    f.pv_grid = Math.min(P - f.pv_home - f.pv_bat, exp);
+    f.bat_home = Math.min(dis, L - f.pv_home);
+    f.grid_home = Math.min(imp, L - f.pv_home - f.bat_home);
+    const b2g = Math.min(dis - f.bat_home, exp - f.pv_grid), g2b = Math.min(chg - f.pv_bat, imp - f.grid_home);
+    f.bat_grid = b2g >= g2b ? b2g : -g2b;   // negativ = Netz lädt Batterie
+  }
+  for (const id of Object.keys(LINES)) {
+    const w = f[id] || 0, on = Math.abs(w) >= 30, line = $("f-" + id);   // unter 30 W: Messrauschen
+    line.classList.toggle("on", on);
+    line.classList.toggle("rev", w < 0);
+    if (id === "bat_grid") line.style.color = w < 0 ? "var(--bad)" : "var(--info)";
+    if (on) svgValue($("fl-" + id), Math.abs(w)); else $("fl-" + id).textContent = "";
+  }
+}
+
+function render(d) {
+  renderFlow(d);
+  const v = d.values || {};
+  for (const [key] of TILES) {
+    const val = v[key];
+    if (!d.connected) { setTile(key, "keine Verbindung", "", "", "na"); continue; }
+    if (val === null || val === undefined) {
+      const why = (d.unsupported || []).includes(key) ? "vom " + d.device_label + " nicht bereitgestellt" : "";
+      setTile(key, "Wert nicht verfügbar", "", why, "na");
+      continue;
+    }
+    const calc = (d.derived || []).includes(key) ? "berechnet" : "";
+    if (key === "pv_power") setTile(key, ...fmtW(val), calc, "accent");
+    else if (key === "load_power") setTile(key, ...fmtW(val), calc);
+    else if (key === "daily_yield") setTile(key, val.toLocaleString("de-DE", { minimumFractionDigits: 1 }), "kWh", "heute");
+    else if (key === "battery_soc") setTile(key, val.toLocaleString("de-DE", { maximumFractionDigits: 1 }), "%");
+    else if (key === "battery_power")
+      setTile(key, ...fmtW(val), val > 0 ? "Entladen" : val < 0 ? "Laden" : "Ruhe", val > 0 ? "info" : val < 0 ? "good" : "");
+    else if (key === "grid_power")
+      setTile(key, ...fmtW(val), val > 0 ? "Netzbezug" : val < 0 ? "Einspeisung" : "kein Austausch", val > 0 ? "bad" : val < 0 ? "good" : "");
+    else if (key === "status") setTile(key, val, "", v.model || "", /fault|stop|fail/i.test(val) ? "bad" : "");
+  }
+  const soc = d.connected && v.battery_soc != null ? v.battery_soc : 0;
+  document.querySelector("#t-battery_soc .bar > div").style.width = Math.max(0, Math.min(100, soc)) + "%";
+
+  $("dot").className = "dot" + (d.connected ? " on" : "");
+  $("conn").textContent = !d.configured ? "nicht konfiguriert"
+    : d.connected ? "verbunden mit " + d.host + ":" + d.port : "keine Verbindung zu " + d.host + ":" + d.port;
+  $("dev").textContent = d.configured ? d.device_label + " (Unit-ID " + d.unit_id + ")" : "";
+  $("last").textContent = d.configured
+    ? "Letzte erfolgreiche Abfrage: " + (d.last_success ? new Date(d.last_success).toLocaleTimeString("de-DE") : "noch keine") : "";
+
+  const m = d.mqtt || {};
+  $("mqtt").textContent = !m.enabled ? "" : m.connected ? "MQTT: verbunden mit " + m.broker
+    : "MQTT: keine Verbindung zu " + m.broker + (m.error ? " (" + m.error + ")" : "");
+
+  const b = $("banner");
+  if (!d.configured) { b.textContent = "Noch keine Verbindung eingerichtet. Bitte über das Zahnrad die IP-Adresse eintragen."; b.className = "show"; }
+  else if (!d.connected && d.error) { b.textContent = "Keine Verbindung: " + d.error; b.className = "show"; }
+  else b.className = "";
+}
+
+async function refresh() {
+  clearTimeout(timer);
+  try {
+    const r = await fetch("/api/values", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    intervalSec = d.interval || 10;
+    render(d);
+  } catch (e) {
+    render({ connected: false, configured: true, host: "?", port: "?", device_label: "", unit_id: "", values: {} });
+    $("conn").textContent = "Dashboard-Server nicht erreichbar";
+    $("dev").textContent = ""; $("last").textContent = ""; $("mqtt").textContent = "";
+    $("banner").textContent = "Dashboard-Server nicht erreichbar."; $("banner").className = "show";
+  }
+  timer = setTimeout(refresh, intervalSec * 1000);
+}
+
+// ---- Einstellungen ----
+function validHost(h) {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (m) return m.slice(1).every(o => +o <= 255 && String(+o) === o);
+  if (/^[0-9.]+$/.test(h)) return false;
+  return h.length <= 253 && /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i.test(h);
+}
+
+function showErrors(errors) {
+  for (const f of FIELDS) {
+    $("e-" + f).textContent = errors[f] || "";
+    $(f).classList.toggle("invalid", !!errors[f]);
+  }
+  return Object.keys(errors).length === 0;
+}
+
+function collect() {
+  const num = id => /^\d+$/.test($(id).value.trim()) ? parseInt($(id).value, 10) : NaN;
+  const s = { host: $("host").value.trim(), device_type: $("device_type").value,
+    port: num("port"), unit_id: num("unit_id"), interval: num("interval"),
+    mqtt_enabled: $("mqtt_enabled").checked, mqtt_host: $("mqtt_host").value.trim(), mqtt_port: num("mqtt_port"),
+    mqtt_user: $("mqtt_user").value.trim(), mqtt_password: $("mqtt_password").value,
+    mqtt_prefix: $("mqtt_prefix").value.trim() || "sungrow" };
+  const e = {};
+  if (s.mqtt_enabled && !validHost(s.mqtt_host)) e.mqtt_host = "Gültige IPv4-Adresse oder Hostname des Brokers erforderlich";
+  if (!s.mqtt_enabled && s.mqtt_host && !validHost(s.mqtt_host)) s.mqtt_host = "";
+  if (!(s.mqtt_port >= 1 && s.mqtt_port <= 65535)) e.mqtt_port = "MQTT-Port: 1 bis 65535";
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(s.mqtt_prefix)) e.mqtt_prefix = "Nur Buchstaben, Ziffern, _ und -";
+  if (!validHost(s.host)) e.host = "Gültige IPv4-Adresse oder Hostname erforderlich";
+  if (!(s.port >= 1 && s.port <= 65535)) e.port = "1 bis 65535";
+  if (!(s.unit_id >= 1 && s.unit_id <= 247)) e.unit_id = "1 bis 247";
+  if (!(s.interval >= 2 && s.interval <= 3600)) e.interval = "2 bis 3600 Sekunden";
+  return showErrors(e) ? s : null;
+}
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.json();
+}
+
+async function openSettings() {
+  showErrors({});
+  $("testout").style.display = "none";
+  try {
+    const { settings: s } = await (await fetch("/api/settings")).json();
+    $("host").value = s.host; $("port").value = s.port; $("device_type").value = s.device_type;
+    $("unit_id").value = s.unit_id; $("interval").value = s.interval; unitLabel();
+    $("mqtt_enabled").checked = !!s.mqtt_enabled; $("mqtt_host").value = s.mqtt_host || "";
+    $("mqtt_port").value = s.mqtt_port || 1883; $("mqtt_user").value = s.mqtt_user || "";
+    $("mqtt_prefix").value = s.mqtt_prefix || "sungrow"; $("mqtt_password").value = "";
+    $("mqtt_password").placeholder = s.mqtt_password_set ? "gespeichert – leer lassen" : "";
+    mqttToggle();
+  } catch (e) { /* Formular behält seine Werte */ }
+  if (!$("dlg").open) $("dlg").showModal();
+}
+
+const unitLabel = () => { $("l-unit_id").textContent = $("device_type").value === "combined" ? "Unit-ID iHM (WR fest: 1)" : "Unit-ID"; };
+$("device_type").addEventListener("change", () => { $("unit_id").value = UNIT_DEFAULT[$("device_type").value]; unitLabel(); });
+const mqttToggle = () => $("mqttfields").classList.toggle("off", !$("mqtt_enabled").checked);
+$("mqtt_enabled").addEventListener("change", mqttToggle);
+$("host").addEventListener("input", () => showErrors({}));
+$("gear").addEventListener("click", openSettings);
+$("cancel").addEventListener("click", () => $("dlg").close());
+
+$("test").addEventListener("click", async () => {
+  const s = collect();
+  if (!s) return;
+  const out = $("testout");
+  out.style.display = "block";
+  out.textContent = "Teste Verbindung …";
+  $("test").disabled = true;
+  try {
+    const res = await post("/api/test", s);
+    out.textContent = "";
+    const head = document.createElement("div");
+    if (res.errors) { showErrors(res.errors); head.className = "bad"; head.textContent = "Eingaben ungültig."; out.appendChild(head); return; }
+    if (!res.ok) { head.className = "bad"; head.textContent = "Fehlgeschlagen: " + res.error; out.appendChild(head); return; }
+    const got = res.registers.filter(r => r.value !== null).length;
+    head.className = got ? "good" : "bad";
+    head.textContent = "Verbindung OK – " + got + " von " + res.registers.length + " Registern liefern Werte:";
+    out.appendChild(head);
+    const tb = document.createElement("table");
+    for (const r of res.registers) {
+      const tr = tb.insertRow();
+      tr.insertCell().textContent = r.label;
+      const c = tr.insertCell(); c.className = "reg"; c.textContent = "Reg. " + r.doc_register + " / ID " + r.unit_id;
+      tr.insertCell().textContent = r.value === null ? (r.raw ? "nicht verfügbar" : "keine Antwort") : r.value + (r.unit ? " " + r.unit : "");
+    }
+    out.appendChild(tb);
+  } catch (e) {
+    out.textContent = "Dashboard-Server nicht erreichbar.";
+  } finally { $("test").disabled = false; }
+});
+
+$("form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const s = collect();
+  if (!s) return;
+  $("save").disabled = true;
+  try {
+    const res = await post("/api/settings", s);
+    if (!res.ok) { showErrors(res.errors || {}); return; }
+    $("dlg").close();
+    setTimeout(refresh, 800);  // Poller verbindet gerade neu
+  } catch (e) {
+    $("e-host").textContent = "Speichern fehlgeschlagen: Server nicht erreichbar";
+  } finally { $("save").disabled = false; }
+});
+
+// ---- Start ----
+(async () => {
+  await refresh();
+  try {
+    const cfg = await (await fetch("/api/settings")).json();
+    if (!cfg.configured) openSettings();   // erster Start: Formular automatisch öffnen
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

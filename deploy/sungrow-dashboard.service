@@ -1,0 +1,19 @@
+[Unit]
+Description=Sungrow SH15T Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sungrow
+WorkingDirectory=/opt/sungrow-dashboard
+ExecStart=/opt/sungrow-dashboard/.venv/bin/python server.py --port 8080
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/sungrow-dashboard
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
